@@ -57,7 +57,7 @@
       
       <!-- ゲーム表示エリア -->
       <div class="lg:col-span-3 flex flex-col">
-        <!-- タイトル表示エリア（サムネイル画像が右上に寄らないよう中央配置・統一） -->
+        <!-- タイトル表示エリア -->
         <div class="flex flex-wrap items-center gap-3 mb-2">
           <div id="title-thumb-container" class="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 border border-[#444] hidden shrink-0 flex items-center justify-center relative">
             <img id="title-thumb-img" src="" alt="" class="w-full h-full object-cover object-center block" style="object-position: center center;">
@@ -88,7 +88,7 @@
             </div>
           </div>
           
-          <iframe id="preview-iframe" class="flex-1 w-full h-full border-0 bg-white" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-pointer-lock"></iframe>
+          <iframe id="preview-iframe" class="flex-1 w-full h-full border-0 bg-white"></iframe>
 
           <!-- 有料ゲームロック -->
           <div id="lock-overlay" class="hidden absolute inset-0 bg-[#0b0f19]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20">
@@ -215,7 +215,19 @@
       terminal.scrollTop = terminal.scrollHeight;
     }
 
-    // 📱 iPhone / 非対応環境検知 & 擬似全画面（Pseudo-fullscreen）トグル
+    // 🕒 直近遊んだゲームのローカル記録
+    function recordRecentPlay(id) {
+      if (!id) return;
+      try {
+        const key = 'ghub_recent_games';
+        let recents = JSON.parse(localStorage.getItem(key) || '[]');
+        recents = recents.filter(item => (typeof item === 'string' ? item : item.id) !== id);
+        recents.unshift({ id, playedAt: Date.now() });
+        if (recents.length > 30) recents = recents.slice(0, 30);
+        localStorage.setItem(key, JSON.stringify(recents));
+      } catch (e) {}
+    }
+
     function isFullscreenSupported() {
       const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
       return !isIOS && (Boolean(mainArea.requestFullscreen) || Boolean(mainArea.webkitRequestFullscreen));
@@ -253,7 +265,7 @@
       mainArea.classList.add('pseudo-fullscreen');
       document.body.style.overflow = 'hidden';
       fullscreenBtn.innerHTML = '<span>✕</span> 全画面解除';
-      log("📱 iPhone/非対応環境を検知：擬似全画面モードに移行しました。");
+      log("📱 擬似全画面モードに移行しました。");
     }
 
     function exitPseudoFullscreen() {
@@ -301,8 +313,12 @@
     });
 
     window.addEventListener('message', (e) => {
-      if (e.data && e.data.type === 'error') {
+      if (!e.data) return;
+      if (e.data.type === 'error') {
         log(`❌ [ゲーム内エラー] ${e.data.msg}`);
+      }
+      if (e.data.type === 'success') {
+        log(`✅ 正常にレンダリングされました！`);
       }
     });
 
@@ -312,7 +328,7 @@
           wasmURL: 'https://cdn.jsdelivr.net/npm/esbuild-wasm@0.19.11/esbuild.wasm'
         });
         esbuildReady = true;
-        statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> ゲームエンジン準備完了';
+        statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> ゲームエンジン準備完了 (v9)';
         log("✅ esbuild-wasm の初期化が完了しました。");
         loadAndRunGame();
       } catch (e) {
@@ -326,12 +342,14 @@
       if (error || !game) return alert('ゲームが見つかりませんでした');
       currentGame = game;
 
+      // 🕒 直近遊んだゲームの履歴に追加
+      recordRecentPlay(gameId);
+
       document.getElementById('game-title').innerText = game.title;
       document.getElementById('game-author').innerText = `by ${game.author_email || 'guest'}`;
       document.getElementById('game-desc').innerText = game.description || '説明はありません。';
       document.getElementById('like-count').innerText = game.likes_count || 0;
 
-      // タイトルサムネイル（中央揃え・右上寄りを完全防止）
       if (game.thumbnail_url) {
         const thumbCont = document.getElementById('title-thumb-container');
         const thumbImg = document.getElementById('title-thumb-img');
@@ -373,7 +391,6 @@
         }
       }
 
-      // ★★★ ゲームデータの取得（404・非Zip判定ガードを強化し、「Can't find end of central directory」を撲滅！） ★★★
       log(`📦 ゲームデータを取得中: ${game.title}`);
       let targetUrl = game.entry_url;
       if (targetUrl && targetUrl.includes('supabase.co')) {
@@ -389,21 +406,18 @@
         const arrayBuffer = await response.arrayBuffer();
         const uint8 = new Uint8Array(arrayBuffer);
 
-        // Zipマジックバイト検査 (先頭が 'PK\x03\x04' または 'PK')
         const isZip = uint8.length >= 4 && uint8[0] === 0x50 && uint8[1] === 0x4B;
 
         if (isZip) {
-          log("⚡ Zipファイルを検出。esbuild エンジンで展開・バンドルします...");
+          log("⚡ Zipファイルを検出。v9 エンジンで展開・バンドルします...");
           await processZipArrayBuffer(arrayBuffer);
         } else {
-          // テキストとしてデコード
           const textData = new TextDecoder('utf-8').decode(uint8);
           if (textData.includes('<!DOCTYPE html>') || textData.includes('<html') || textData.includes('<head>') || textData.includes('<body>') || textData.includes('<script')) {
             log("⚡ 単一HTMLゲームを検出。展開して実行します...");
             iframe.srcdoc = textData;
             log("🚀 ゲーム起動完了！");
           } else {
-            // もしエラーJSONや不正なデータだった場合
             log(`⚠️ 取得されたデータがHTML/Zipではありません。\n内容: ${textData.slice(0, 150)}`);
             iframe.srcdoc = `<body style="background:#0b0f19;color:#ff6b6b;font-family:sans-serif;padding:24px;text-align:center;">
               <h3>⚠️ ゲームファイルの読み込みに失敗しました</h3>
@@ -421,7 +435,7 @@
       loadReviews();
     }
 
-    // ★★★ Zipの展開・バンドル（index.html自動補完付き & ArrayBuffer直接処理） ★★★
+    // ★★★ 添付ファイル Local Zip Runner v9 準拠の完全堅牢バンドル処理 ★★★
     async function processZipArrayBuffer(arrayBuffer) {
       log(`⚡ esbuild でZipを展開・バンドル中...`);
       try {
@@ -431,9 +445,7 @@
 
         let prefix = '';
         const rootFolders = new Set(paths.map(p => p.split('/')[0]).filter(Boolean));
-        if (rootFolders.size === 1 && paths.some(p => p.endsWith('index.html'))) {
-          prefix = Array.from(rootFolders)[0] + '/';
-        }
+        if (rootFolders.size === 1) prefix = Array.from(rootFolders)[0] + '/';
 
         for (const [path, entry] of Object.entries(zip.files)) {
           if (entry.dir) continue;
@@ -442,34 +454,18 @@
         }
 
         let html = files['index.html'] || files['public/index.html'];
+        const isNextApp = !html && (files['app/page.tsx'] || files['app/page.jsx'] || files['src/app/page.tsx'] || files['src/app/page.jsx']);
 
-        // 🌟 index.html がない場合でも Vite/React/SPA 等のときは自動で index.html を生成してバンドルエラーを無くす
         if (!html) {
-          log('ℹ️ index.html が見つかりません。Vite/React用 index.html を自動生成します...');
-          html = `<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>${currentGame?.title || 'Game'}</title>
-  <style>
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
-    #root, #app { width: 100%; height: 100%; }
-  </style>
-</head>
-<body class="bg-black text-white m-0 p-0 overflow-hidden">
-  <div id="root"></div>
-  <div id="app"></div>
-</body>
-</html>`;
-          files['index.html'] = html;
+          log('ℹ️ index.html を自動生成します。');
+          html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${currentGame?.title || 'Game'}</title></head><body><div id="root"></div></body></html>`;
         }
 
         const entryCandidates = [
+          'app/page.tsx', 'app/page.jsx', 'src/app/page.tsx', 'src/app/page.jsx',
           'src/main.tsx', 'src/main.jsx', 'src/index.tsx', 'src/index.jsx', 'src/App.tsx', 'src/App.jsx',
-          'src/main.ts', 'src/main.js', 'src/index.ts', 'src/index.js',
           'main.tsx', 'main.jsx', 'index.tsx', 'index.jsx', 'App.tsx', 'App.jsx',
-          'main.ts', 'main.js', 'index.ts', 'index.js'
+          'src/main.ts', 'src/main.js', 'src/index.ts', 'src/index.js'
         ];
         let entryPath = entryCandidates.find(e => files[e] !== undefined);
 
@@ -478,7 +474,6 @@
         }
 
         if (!entryPath) {
-          // TSXなしの通常の静的HTMLゲーム
           iframe.srcdoc = html;
           log('🚀 静的ゲーム起動完了！');
           return;
@@ -491,11 +486,14 @@
           setup(build) {
             build.onResolve({ filter: /.*/ }, args => {
               let target = args.path.startsWith('/') ? args.path.slice(1) : args.path;
-              const isRelative = args.path.startsWith('.');
-              const isAbsoluteLocal = files[target] !== undefined;
 
-              if (isRelative || isAbsoluteLocal || args.kind === 'entry-point') {
-                if (args.importer) {
+              if (args.path.startsWith('@/')) target = args.path.slice(2);
+
+              const isRelative = args.path.startsWith('.');
+              const isAbsoluteLocal = files[target] !== undefined || files['src/' + target] !== undefined;
+
+              if (isRelative || isAbsoluteLocal || args.kind === 'entry-point' || args.path.startsWith('@/')) {
+                if (args.importer && isRelative) {
                   const basePath = args.importer.split('/').slice(0, -1).join('/');
                   const rawPath = basePath ? basePath + '/' + args.path : args.path;
                   const parts = rawPath.split('/');
@@ -510,39 +508,42 @@
 
                 const exts = ['', '.tsx', '.ts', '.jsx', '.js', '.css', '/index.tsx', '/index.ts', '/index.jsx', '/index.js'];
                 for (const ext of exts) {
-                  if (files[target + ext] !== undefined) {
-                    return { path: target + ext, namespace: 'zip-vfs' };
-                  }
+                  if (files[target + ext] !== undefined) return { path: target + ext, namespace: 'zip-vfs' };
+                  if (files['src/' + target + ext] !== undefined) return { path: 'src/' + target + ext, namespace: 'zip-vfs' };
                 }
                 return { path: target, namespace: 'zip-vfs' };
               }
 
+              if (args.path.startsWith('http://') || args.path.startsWith('https://')) {
+                return { path: args.path, external: true };
+              }
+
               let pkg = args.path;
-              return { path: `https://esm.sh/${pkg}`, external: true };
+              if (pkg === 'react') return { path: 'https://esm.sh/react@18.2.0?dev', external: true };
+              if (pkg === 'react-dom') return { path: 'https://esm.sh/react-dom@18.2.0?dev', external: true };
+              if (pkg === 'react-dom/client') return { path: 'https://esm.sh/react-dom@18.2.0/client?dev', external: true };
+              if (pkg.startsWith('react/')) return { path: `https://esm.sh/${pkg}@18.2.0?dev`, external: true };
+              
+              return { path: `https://esm.sh/${pkg}?deps=react@18.2.0,react-dom@18.2.0&dev`, external: true };
             });
 
             build.onLoad({ filter: /.*/, namespace: 'zip-vfs' }, args => {
-              const content = files[args.path];
-              if (content === undefined) {
-                return { errors: [{ text: `File not found in zip: ${args.path}` }] };
-              }
+              let content = files[args.path];
+              if (content === undefined) return { errors: [{ text: `File not found in zip: ${args.path}` }] };
 
               if (args.path.endsWith('.css')) {
                 const escapedCss = JSON.stringify(content);
-                const js = `
-                  const style = document.createElement('style');
-                  style.textContent = ${escapedCss};
-                  document.head.appendChild(style);
-                `;
-                return { contents: js, loader: 'js' };
+                return { contents: `const style = document.createElement('style'); style.textContent = ${escapedCss}; document.head.appendChild(style);`, loader: 'js' };
               }
+
+              content = content.replace(/^['"]use client['"];?/gm, '').replace(/^['"]use server['"];?/gm, '');
 
               let loader = 'js';
               if (args.path.endsWith('.tsx')) loader = 'tsx';
               else if (args.path.endsWith('.ts')) loader = 'ts';
               else if (args.path.endsWith('.jsx')) loader = 'jsx';
 
-              return { contents: content, loader: loader };
+              return { contents: content, loader };
             });
           }
         };
@@ -554,34 +555,103 @@
           plugins: [zipPlugin],
           write: false,
           jsx: 'automatic',
-          jsxImportSource: 'react'
+          jsxImportSource: 'https://esm.sh/react@18.2.0'
         });
 
         const bundledJs = result.outputFiles[0].text;
-        log('🔗 html に JS を注入中...');
+        log('🔗 HTMLとスタイルを準備中...');
 
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
-        const head = doc.head;
+        const head = doc.head || doc.createElement('head');
 
         const tailwindScript = doc.createElement('script');
         tailwindScript.src = "https://cdn.tailwindcss.com";
         head.appendChild(tailwindScript);
 
+        const patchScript = doc.createElement('script');
+        patchScript.textContent = `
+          const NativeURL = window.URL;
+          window.URL = function(url, base) {
+            try {
+              if (base) return new NativeURL(url, base);
+              return new NativeURL(url, window.location.href.startsWith('http') ? window.location.href : 'http://localhost');
+            } catch (e) {
+              if (typeof url === 'string' && (url.startsWith('/') || url.startsWith('.'))) {
+                return new NativeURL(url, 'http://localhost');
+              }
+              return new NativeURL('http://localhost/' + String(url).replace(/^\\/+/, ''));
+            }
+          };
+          window.URL.prototype = NativeURL.prototype;
+          window.URL.createObjectURL = NativeURL.createObjectURL;
+          window.URL.revokeObjectURL = NativeURL.revokeObjectURL;
+
+          const NativeWebSocket = window.WebSocket;
+          window.WebSocket = function(url, protocols) {
+            if (!url || url === 'ws://' || url === 'wss://' || url.startsWith('ws:///') || url.startsWith('wss:///')) {
+              return {
+                addEventListener: () => {},
+                removeEventListener: () => {},
+                send: () => {},
+                close: () => {}
+              };
+            }
+            return new NativeWebSocket(url, protocols);
+          };
+
+          window.addEventListener('error', function(e) {
+            if (e.message && (e.message.includes('WebSocket') || e.message.includes('URL'))) {
+              e.stopImmediatePropagation();
+              return true;
+            }
+            window.parent.postMessage({ type: 'error', msg: e.message || 'Script load error' }, '*');
+          });
+        `;
+        head.insertBefore(patchScript, head.firstChild);
+
         const scriptEl = doc.createElement('script');
         scriptEl.type = 'module';
-        scriptEl.textContent = bundledJs;
+
+        if (isNextApp) {
+          const blob = new Blob([bundledJs], { type: 'application/javascript' });
+          const blobUrl = URL.createObjectURL(blob);
+
+          scriptEl.textContent = `
+            import React, { Suspense } from 'https://esm.sh/react@18.2.0?dev';
+            import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client?dev';
+
+            window.React = React;
+
+            async function render() {
+              try {
+                const mod = await import('${blobUrl}');
+                const Component = mod.default || mod[Object.keys(mod)[0]];
+                
+                const rootEl = document.getElementById('root');
+                if (rootEl && Component) {
+                  const root = createRoot(rootEl);
+                  root.render(
+                    React.createElement(Suspense, { fallback: React.createElement('div', null, 'Loading...') },
+                      React.createElement(Component)
+                    )
+                  );
+                  window.parent.postMessage({ type: 'success' }, '*');
+                } else {
+                  window.parent.postMessage({ type: 'error', msg: '描画するコンポーネント (export default) が取得できませんでした。' }, '*');
+                }
+              } catch(err) {
+                window.parent.postMessage({ type: 'error', msg: err.stack || err.message }, '*');
+              }
+            }
+            render();
+          `;
+        } else {
+          scriptEl.textContent = bundledJs;
+        }
 
         doc.querySelectorAll('script[type="module"]').forEach(s => s.remove());
         doc.body.appendChild(scriptEl);
-
-        const errScript = doc.createElement('script');
-        errScript.textContent = `
-          window.onerror = function(msg, url, line) {
-            window.parent.postMessage({ type: 'error', msg: msg + ' (Line: ' + line + ')' }, '*');
-          };
-        `;
-        head.appendChild(errScript);
 
         iframe.srcdoc = doc.documentElement.outerHTML;
         log('🚀 ゲーム起動完了！遊べます！');
@@ -591,7 +661,6 @@
       }
     }
 
-    // 💰 購入処理（作者の手元にコインが入る！）
     window.buyGame = async () => {
       if (!currentUser) return window.location.href = 'index.html';
       if (userCoins < currentGame.price_coins) return alert(`コイン不足！(所持: ${userCoins} G)`);
@@ -618,7 +687,6 @@
       loadAndRunGame();
     };
 
-    // 🪙 投げ銭処理（作者の手元にコインが入る！）
     window.sendTip = async (amount = 30) => {
       if (!currentUser) return alert('ログインが必要です！');
       if (userCoins < amount) return alert('コインが足りません！');
@@ -647,14 +715,12 @@
       loadMessages();
     };
 
-    // 削除
     window.deleteGame = async () => {
       if (!confirm('削除しますか？')) return;
       await supabase.from('games').delete().eq('id', gameId);
       window.location.href = 'index.html';
     };
 
-    // いいね
     window.addLike = async () => {
       const { data: g } = await supabase.from('games').select('likes_count').eq('id', gameId).single();
       const next = (g?.likes_count || 0) + 1;
@@ -662,7 +728,6 @@
       document.getElementById('like-count').innerText = next;
     };
 
-    // ランキング
     async function loadScores() {
       const { data: scores } = await supabase.from('leaderboards').select('*').eq('game_id', gameId).order('score', { ascending: false }).limit(10);
       const list = document.getElementById('leaderboard-list');
@@ -684,7 +749,6 @@
       loadScores();
     });
 
-    // チャット
     async function loadMessages() {
       const { data: msgs } = await supabase.from('messages').select('*').eq('game_id', gameId).order('created_at', { ascending: true });
       const container = document.getElementById('chat-messages');
@@ -707,7 +771,6 @@
       loadMessages();
     });
 
-    // ⭐⭐⭐ レビュー & 評価機能 ⭐⭐⭐
     const starButtons = document.querySelectorAll('.star-btn');
     const starLabel = document.getElementById('selected-star-label');
 
@@ -735,7 +798,6 @@
 
     async function loadReviews() {
       let reviews = [];
-      // 1. サーバーAPIから取得（超高速）
       try {
         const res = await fetch(`/api/reviews?game_id=${gameId}`);
         if (res.ok) {
@@ -744,7 +806,6 @@
         }
       } catch (e) {}
 
-      // 2. Supabaseから取得試行
       if (reviews.length === 0) {
         try {
           const { data, error } = await supabase.from('reviews').select('*').eq('game_id', gameId).order('created_at', { ascending: false });
@@ -752,7 +813,6 @@
         } catch (err) {}
       }
 
-      // 3. localStorageフォールバック
       if (reviews.length === 0) {
         try {
           const local = JSON.parse(localStorage.getItem(`ghub_rev_${gameId}`) || '[]');
@@ -831,7 +891,6 @@
         created_at: new Date().toISOString()
       };
 
-      // 1. サーバーAPI保存（超高速・確実）
       try {
         await fetch('/api/reviews', {
           method: 'POST',
@@ -840,12 +899,10 @@
         });
       } catch (err) {}
 
-      // 2. Supabaseへ挿入試行
       try {
         await supabase.from('reviews').insert(reviewPayload);
       } catch (err) {}
 
-      // 3. localStorageにも二重保存
       try {
         const local = JSON.parse(localStorage.getItem(`ghub_rev_${gameId}`) || '[]');
         local.unshift(reviewPayload);
@@ -859,7 +916,6 @@
       loadReviews();
     });
 
-    // 起動
     initEsbuild();
   </script>
 </body>

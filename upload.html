@@ -15,7 +15,7 @@
     
     <div class="flex justify-between items-center border-b border-[#333] pb-3">
       <h1 class="text-xl font-bold text-white flex items-center gap-2">
-        📦 G-HUB Uploader (.zip ＆ .html 対応)
+        📦 G-HUB Uploader (.zip ＆ .html 対応 / Vite & Next.js Engine v9)
       </h1>
       <a href="index.html" class="text-xs text-indigo-400 hover:underline">← トップへ戻る</a>
     </div>
@@ -26,13 +26,13 @@
       <div class="lg:col-span-1 flex flex-col gap-3 text-xs">
         <div id="drop-zone" class="border-2 border-dashed border-[#444] hover:border-indigo-500 rounded-xl p-5 text-center bg-[#2d2d2d] cursor-pointer transition">
           <p class="font-bold text-sm text-slate-200">📁 .zip または .html をドロップ</p>
-          <p class="text-[10px] text-slate-400 mt-1">Vite/React TSX も 通常HTMLも自動判別 (index.html自動生成)</p>
+          <p class="text-[10px] text-slate-400 mt-1">Vite / Next.js / React / 通常HTMLを自動解析</p>
           <input type="file" id="file-input" accept=".zip,.html" class="hidden">
         </div>
 
         <div id="status" class="p-2 rounded bg-[#2e7d32] text-center font-bold text-xs font-mono">エンジン準備中...</div>
 
-        <!-- サムネイルプレビュー表示枠（中央揃え・右上寄りを完全防止） -->
+        <!-- サムネイルプレビュー表示枠 -->
         <div class="bg-[#1e1e1e] p-2.5 rounded-xl border border-[#333] flex items-center gap-3">
           <div id="thumb-preview" class="w-16 h-12 bg-slate-900 border border-[#444] rounded flex items-center justify-center text-xs text-slate-500 overflow-hidden relative shrink-0">
             未設定
@@ -94,14 +94,14 @@
         <div class="h-10 bg-[#2d2d2d] border-b border-[#333] flex justify-between items-center px-4 text-xs text-[#ccc]">
           <span class="font-bold">Preview</span>
           <div class="flex gap-2">
-            <!-- 📸 サムネ撮影ボタン（画面全体を中央揃えで綺麗にキャプチャ） -->
+            <!-- 📸 サムネ撮影ボタン -->
             <button type="button" onclick="captureThumbnail()" class="bg-gradient-to-r from-amber-500 to-pink-500 hover:opacity-90 text-slate-950 font-black px-2.5 py-1 rounded text-xs shadow transition flex items-center gap-1">
               📸 この瞬間をサムネにする
             </button>
             <button id="clear-data-btn" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-2 py-1 rounded text-xs">🗑️ セーブ消去</button>
           </div>
         </div>
-        <iframe id="preview-iframe" class="flex-1 w-full h-full border-none bg-white" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-pointer-lock"></iframe>
+        <iframe id="preview-iframe" class="flex-1 w-full h-full border-none bg-white"></iframe>
       </div>
 
     </div>
@@ -121,14 +121,13 @@
     let esbuildReady = false;
     let finalPayload = null;
     let payloadType = 'html';
-    let capturedThumbnailBlob = null; // 撮影されたサムネBlob
+    let capturedThumbnailBlob = null;
 
     function log(msg) {
       terminal.innerText += msg + '\n';
       terminal.scrollTop = terminal.scrollHeight;
     }
 
-    // 📸 手動での画像ファイル選択対応
     window.handleThumbnailFile = (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -138,7 +137,6 @@
       log(`✅ サムネイル画像を設定しました: ${file.name}`);
     };
 
-    // 📸 中央揃えサムネイルキャプチャ処理（右上寄りを完全防止！）
     window.captureThumbnail = async () => {
       if (!iframe.contentDocument && !iframe.contentWindow) return alert("ゲーム画面が読み込まれていません！");
       log("📸 サムネイルをキャプチャ中（中央配置・高精度処理）...");
@@ -147,11 +145,9 @@
         const doc = iframe.contentDocument || iframe.contentWindow.document;
         const win = iframe.contentWindow || window;
 
-        // 1. もし iframe 内に canvas があれば、canvas から直接キャプチャ（ゲーム画面が完全に綺麗に写る）
         const canvasEls = doc.querySelectorAll('canvas');
         let sourceCanvas = null;
         if (canvasEls.length > 0) {
-          // 最も面積の大きい canvas を採用
           let maxArea = 0;
           canvasEls.forEach(c => {
             const area = (c.width || c.clientWidth || 0) * (c.height || c.clientHeight || 0);
@@ -172,7 +168,6 @@
         ctx.fillRect(0, 0, targetW, targetH);
 
         if (sourceCanvas && sourceCanvas.width > 0 && sourceCanvas.height > 0) {
-          // canvas を 16:9 の中央にアスペクト比維持で描画
           const sw = sourceCanvas.width;
           const sh = sourceCanvas.height;
           const scale = Math.max(targetW / sw, targetH / sh);
@@ -180,10 +175,8 @@
           const dh = sh * scale;
           const dx = (targetW - dw) / 2;
           const dy = (targetH - dh) / 2;
-
           ctx.drawImage(sourceCanvas, dx, dy, dw, dh);
         } else {
-          // 2. DOM要素全体のキャプチャ（画面全体の描画領域を測ってキャプチャ）
           const rootEl = doc.body || doc.documentElement;
           const renderedCanvas = await html2canvas(rootEl, {
             useCORS: true,
@@ -192,8 +185,6 @@
             windowWidth: doc.documentElement.clientWidth || win.innerWidth || 800,
             windowHeight: doc.documentElement.clientHeight || win.innerHeight || 600
           });
-
-          // 全体の中央に合わせて 16:9 に縮小描画
           const sw = renderedCanvas.width;
           const sh = renderedCanvas.height;
           const scale = Math.max(targetW / sw, targetH / sh);
@@ -201,7 +192,6 @@
           const dh = sh * scale;
           const dx = (targetW - dw) / 2;
           const dy = (targetH - dh) / 2;
-
           ctx.drawImage(renderedCanvas, dx, dy, dw, dh);
         }
 
@@ -230,7 +220,7 @@
       try {
         await esbuild.initialize({ wasmURL: 'https://cdn.jsdelivr.net/npm/esbuild-wasm@0.19.11/esbuild.wasm' });
         esbuildReady = true;
-        statusEl.innerText = "⚡ エンジン準備完了";
+        statusEl.innerText = "⚡ エンジン準備完了 (v9)";
         log("✅ esbuild-wasm エンジン準備完了。");
       } catch (e) { log("❌ 初期化失敗: " + e.message); }
     }
@@ -267,6 +257,7 @@
       }
     }
 
+    // ★★★ 添付ファイル Local Zip Runner v9 準拠の完全堅牢バンドル処理 ★★★
     async function processZip(file) {
       if (!esbuildReady) return alert("esbuild 準備中...");
       document.getElementById('game-title').value = file.name.replace('.zip', '');
@@ -279,9 +270,7 @@
 
         let prefix = '';
         const rootFolders = new Set(paths.map(p => p.split('/')[0]).filter(Boolean));
-        if (rootFolders.size === 1 && paths.some(p => p.endsWith('index.html'))) {
-          prefix = Array.from(rootFolders)[0] + '/';
-        }
+        if (rootFolders.size === 1) prefix = Array.from(rootFolders)[0] + '/';
 
         for (const [path, entry] of Object.entries(zip.files)) {
           if (entry.dir) continue;
@@ -290,34 +279,18 @@
         }
 
         let html = files['index.html'] || files['public/index.html'];
+        const isNextApp = !html && (files['app/page.tsx'] || files['app/page.jsx'] || files['src/app/page.tsx'] || files['src/app/page.jsx']);
 
-        // 🌟 index.html がない場合でも Vite/React/SPA 等のときは自動で index.html を生成してバンドルエラーを無くす
         if (!html) {
-          log('ℹ️ index.html が見つかりません。Vite/React用 index.html を自動生成します...');
-          html = `<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>${file.name.replace('.zip', '')}</title>
-  <style>
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
-    #root, #app { width: 100%; height: 100%; }
-  </style>
-</head>
-<body class="bg-black text-white m-0 p-0 overflow-hidden">
-  <div id="root"></div>
-  <div id="app"></div>
-</body>
-</html>`;
-          files['index.html'] = html;
+          log('ℹ️ index.html を自動生成します。');
+          html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${file.name.replace('.zip', '')}</title></head><body><div id="root"></div></body></html>`;
         }
 
         const entryCandidates = [
+          'app/page.tsx', 'app/page.jsx', 'src/app/page.tsx', 'src/app/page.jsx',
           'src/main.tsx', 'src/main.jsx', 'src/index.tsx', 'src/index.jsx', 'src/App.tsx', 'src/App.jsx',
-          'src/main.ts', 'src/main.js', 'src/index.ts', 'src/index.js',
           'main.tsx', 'main.jsx', 'index.tsx', 'index.jsx', 'App.tsx', 'App.jsx',
-          'main.ts', 'main.js', 'index.ts', 'index.js'
+          'src/main.ts', 'src/main.js', 'src/index.ts', 'src/index.js'
         ];
         let entryPath = entryCandidates.find(e => files[e] !== undefined);
 
@@ -329,45 +302,73 @@
           iframe.srcdoc = html;
           finalPayload = file;
           payloadType = 'zip';
-          return log('🚀 プレビュー描画完了！');
+          return log('🚀 静的HTMLゲームとして描画完了！');
         }
 
-        log(`⚡ esbuild でバンドル中 (${entryPath})...`);
+        log(`⚡ esbuild でビルド中 (${entryPath})...`);
 
         const zipPlugin = {
           name: 'zip-vfs',
           setup(build) {
             build.onResolve({ filter: /.*/ }, args => {
               let target = args.path.startsWith('/') ? args.path.slice(1) : args.path;
-              const isRelative = args.path.startsWith('.');
-              const isAbsoluteLocal = files[target] !== undefined;
 
-              if (isRelative || isAbsoluteLocal || args.kind === 'entry-point') {
-                if (args.importer) {
+              if (args.path.startsWith('@/')) target = args.path.slice(2);
+
+              const isRelative = args.path.startsWith('.');
+              const isAbsoluteLocal = files[target] !== undefined || files['src/' + target] !== undefined;
+
+              if (isRelative || isAbsoluteLocal || args.kind === 'entry-point' || args.path.startsWith('@/')) {
+                if (args.importer && isRelative) {
                   const basePath = args.importer.split('/').slice(0, -1).join('/');
                   const rawPath = basePath ? basePath + '/' + args.path : args.path;
                   const parts = rawPath.split('/');
                   const stack = [];
                   for (const p of parts) {
                     if (p === '.' || p === '') continue;
-                    if (p === '..') stack.pop(); else stack.push(p);
+                    if (p === '..') stack.pop();
+                    else stack.push(p);
                   }
                   target = stack.join('/');
                 }
+
                 const exts = ['', '.tsx', '.ts', '.jsx', '.js', '.css', '/index.tsx', '/index.ts', '/index.jsx', '/index.js'];
                 for (const ext of exts) {
                   if (files[target + ext] !== undefined) return { path: target + ext, namespace: 'zip-vfs' };
+                  if (files['src/' + target + ext] !== undefined) return { path: 'src/' + target + ext, namespace: 'zip-vfs' };
                 }
                 return { path: target, namespace: 'zip-vfs' };
               }
-              return { path: `https://esm.sh/${args.path}`, external: true };
+
+              if (args.path.startsWith('http://') || args.path.startsWith('https://')) {
+                return { path: args.path, external: true };
+              }
+
+              let pkg = args.path;
+              if (pkg === 'react') return { path: 'https://esm.sh/react@18.2.0?dev', external: true };
+              if (pkg === 'react-dom') return { path: 'https://esm.sh/react-dom@18.2.0?dev', external: true };
+              if (pkg === 'react-dom/client') return { path: 'https://esm.sh/react-dom@18.2.0/client?dev', external: true };
+              if (pkg.startsWith('react/')) return { path: `https://esm.sh/${pkg}@18.2.0?dev`, external: true };
+              
+              return { path: `https://esm.sh/${pkg}?deps=react@18.2.0,react-dom@18.2.0&dev`, external: true };
             });
 
             build.onLoad({ filter: /.*/, namespace: 'zip-vfs' }, args => {
-              const content = files[args.path];
+              let content = files[args.path];
               if (content === undefined) return { errors: [{ text: `File not found: ${args.path}` }] };
-              if (args.path.endsWith('.css')) return { contents: `const s=document.createElement('style');s.textContent=${JSON.stringify(content)};document.head.appendChild(s);`, loader: 'js' };
-              let loader = args.path.endsWith('.tsx') ? 'tsx' : args.path.endsWith('.ts') ? 'ts' : args.path.endsWith('.jsx') ? 'jsx' : 'js';
+
+              if (args.path.endsWith('.css')) {
+                const escapedCss = JSON.stringify(content);
+                return { contents: `const style = document.createElement('style'); style.textContent = ${escapedCss}; document.head.appendChild(style);`, loader: 'js' };
+              }
+
+              content = content.replace(/^['"]use client['"];?/gm, '').replace(/^['"]use server['"];?/gm, '');
+
+              let loader = 'js';
+              if (args.path.endsWith('.tsx')) loader = 'tsx';
+              else if (args.path.endsWith('.ts')) loader = 'ts';
+              else if (args.path.endsWith('.jsx')) loader = 'jsx';
+
               return { contents: content, loader };
             });
           }
@@ -380,18 +381,102 @@
           plugins: [zipPlugin],
           write: false,
           jsx: 'automatic',
-          jsxImportSource: 'react'
+          jsxImportSource: 'https://esm.sh/react@18.2.0'
         });
+
+        const bundledJs = result.outputFiles[0].text;
+        log('🔗 HTMLとスタイルを準備中...');
 
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
-        const tw = doc.createElement('script');
-        tw.src = "https://cdn.tailwindcss.com";
-        doc.head.appendChild(tw);
+        const head = doc.head || doc.createElement('head');
+
+        const tailwindScript = doc.createElement('script');
+        tailwindScript.src = "https://cdn.tailwindcss.com";
+        head.appendChild(tailwindScript);
+
+        // 安全な URL パッチおよび WebSocket インターセプター
+        const patchScript = doc.createElement('script');
+        patchScript.textContent = `
+          const NativeURL = window.URL;
+          window.URL = function(url, base) {
+            try {
+              if (base) return new NativeURL(url, base);
+              return new NativeURL(url, window.location.href.startsWith('http') ? window.location.href : 'http://localhost');
+            } catch (e) {
+              if (typeof url === 'string' && (url.startsWith('/') || url.startsWith('.'))) {
+                return new NativeURL(url, 'http://localhost');
+              }
+              return new NativeURL('http://localhost/' + String(url).replace(/^\\/+/, ''));
+            }
+          };
+          window.URL.prototype = NativeURL.prototype;
+          window.URL.createObjectURL = NativeURL.createObjectURL;
+          window.URL.revokeObjectURL = NativeURL.revokeObjectURL;
+
+          const NativeWebSocket = window.WebSocket;
+          window.WebSocket = function(url, protocols) {
+            if (!url || url === 'ws://' || url === 'wss://' || url.startsWith('ws:///') || url.startsWith('wss:///')) {
+              return {
+                addEventListener: () => {},
+                removeEventListener: () => {},
+                send: () => {},
+                close: () => {}
+              };
+            }
+            return new NativeWebSocket(url, protocols);
+          };
+
+          window.addEventListener('error', function(e) {
+            if (e.message && (e.message.includes('WebSocket') || e.message.includes('URL'))) {
+              e.stopImmediatePropagation();
+              return true;
+            }
+            window.parent.postMessage({ type: 'error', msg: e.message || 'Script load error' }, '*');
+          });
+        `;
+        head.insertBefore(patchScript, head.firstChild);
 
         const scriptEl = doc.createElement('script');
         scriptEl.type = 'module';
-        scriptEl.textContent = result.outputFiles[0].text;
+
+        if (isNextApp) {
+          const blob = new Blob([bundledJs], { type: 'application/javascript' });
+          const blobUrl = URL.createObjectURL(blob);
+
+          scriptEl.textContent = `
+            import React, { Suspense } from 'https://esm.sh/react@18.2.0?dev';
+            import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client?dev';
+
+            window.React = React;
+
+            async function render() {
+              try {
+                const mod = await import('${blobUrl}');
+                const Component = mod.default || mod[Object.keys(mod)[0]];
+                
+                const rootEl = document.getElementById('root');
+                if (rootEl && Component) {
+                  const root = createRoot(rootEl);
+                  root.render(
+                    React.createElement(Suspense, { fallback: React.createElement('div', null, 'Loading...') },
+                      React.createElement(Component)
+                    )
+                  );
+                  window.parent.postMessage({ type: 'success' }, '*');
+                } else {
+                  window.parent.postMessage({ type: 'error', msg: '描画するコンポーネント (export default) が取得できませんでした。' }, '*');
+                }
+              } catch(err) {
+                window.parent.postMessage({ type: 'error', msg: err.stack || err.message }, '*');
+              }
+            }
+            render();
+          `;
+        } else {
+          scriptEl.textContent = bundledJs;
+        }
+
         doc.querySelectorAll('script[type="module"]').forEach(s => s.remove());
         doc.body.appendChild(scriptEl);
 
@@ -399,9 +484,9 @@
         iframe.srcdoc = finalHtml;
         finalPayload = new Blob([finalHtml], { type: 'text/html' });
         payloadType = 'html';
-        log('🚀 TSXバンドル完了！プレビューで遊べます！');
+        log('🚀 バンドル完了！プレビューで遊べます！');
       } catch (err) {
-        log(`❌ エラー: ${err.message}`);
+        log(`❌ ビルド失敗: ${err.message}`);
       }
     }
 
@@ -431,7 +516,6 @@
         });
         const entryUrl = supabase.storage.from('games').getPublicUrl(`${gameId}/${filename}`).data.publicUrl;
 
-        // サムネイル画像があればアップロード
         let thumbnailUrl = null;
         if (capturedThumbnailBlob) {
           log('📸 サムネイル画像を保存中...');
