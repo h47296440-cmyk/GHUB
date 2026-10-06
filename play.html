@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>プレイ - G-HUB</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/esbuild-wasm@0.19.11/lib/browser.min.js"></script>
+  <style>
+    /* 擬似全画面（iOS / Safari 等のフルスクリーン非対応環境用） */
+    .pseudo-fullscreen {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: none !important;
+      max-height: none !important;
+      z-index: 99999 !important;
+      margin: 0 !important;
+      border-radius: 0 !important;
+      border: none !important;
+      background: #000 !important;
+    }
+    .pseudo-fullscreen #preview-iframe {
+      height: calc(100vh - 40px) !important;
+    }
+  </style>
+</head>
+<body class="bg-[#1e1e1e] text-white min-h-screen p-4 font-sans">
+  <div class="max-w-7xl mx-auto">
+    
+    <!-- ヘッダー -->
+    <div class="flex justify-between items-center mb-3 pb-3 border-b border-[#333]">
+      <a href="index.html" class="text-indigo-400 hover:underline font-bold text-xs">← トップ一覧へ戻る</a>
+      
+      <div id="author-controls" class="hidden flex items-center gap-2">
+        <button onclick="deleteGame()" class="bg-rose-600 hover:bg-rose-500 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition">🗑️ 削除</button>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button onclick="sendTip(30)" id="tip-btn" class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:opacity-90 px-3 py-1.5 rounded-xl font-bold text-xs text-slate-950 flex items-center gap-1 shadow">
+          🪙 30 G 投げ銭！
+        </button>
+        <button onclick="addLike()" class="bg-rose-600 hover:bg-rose-500 px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 shadow">
+          ❤️ <span id="like-count">0</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- メイングリッド -->
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      
+      <!-- ゲーム表示エリア -->
+      <div class="lg:col-span-3 flex flex-col">
+        <!-- タイトル表示エリア（サムネイル画像が右上に寄らないよう中央配置・統一） -->
+        <div class="flex flex-wrap items-center gap-3 mb-2">
+          <div id="title-thumb-container" class="w-10 h-10 rounded-lg overflow-hidden bg-slate-800 border border-[#444] hidden shrink-0 flex items-center justify-center">
+            <img id="title-thumb-img" src="" alt="" class="w-full h-full object-cover object-center block" style="object-position: center center;">
+          </div>
+          <h1 id="game-title" class="text-xl font-black text-slate-100">読み込み中...</h1>
+          <span id="price-badge" class="text-xs font-bold px-2 py-0.5 rounded"></span>
+          <span id="avg-rating-badge" class="text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded flex items-center gap-1">
+            ⭐ <span id="avg-rating-val">-</span> (<span id="rating-count-val">0</span>件)
+          </span>
+          <span id="game-author" class="text-xs text-slate-500 font-mono"></span>
+        </div>
+
+        <!-- プレビュー/プレイ枠 -->
+        <div id="main-player" class="bg-[#1e1e1e] rounded-xl border border-[#333] flex flex-col aspect-video shadow-2xl relative overflow-hidden transition-all duration-200">
+          <div class="h-10 bg-[#2d2d2d] border-b border-[#333] flex items-center justify-between px-4 text-xs text-[#ccc]">
+            <span id="engine-status" class="font-bold flex items-center gap-2 truncate">
+              <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> Wasmエンジン起動中...
+            </span>
+            <div class="flex gap-2">
+              <button id="clear-data-btn" class="bg-[#dc2626] hover:bg-[#ef4444] text-white px-3 py-1 rounded font-bold text-xs transition">🗑️ セーブデータ消去</button>
+              <button id="fullscreen-btn" class="bg-[#4f46e5] hover:bg-[#6366f1] text-white px-3 py-1 rounded font-bold text-xs transition flex items-center gap-1">
+                <span>⛶</span> 全画面表示
+              </button>
+            </div>
+          </div>
+          
+          <iframe id="preview-iframe" class="flex-1 w-full h-full border-0 bg-white" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-pointer-lock"></iframe>
+
+          <!-- 有料ゲームロック -->
+          <div id="lock-overlay" class="hidden absolute inset-0 bg-[#0b0f19]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20">
+            <span class="text-5xl mb-3">🔒</span>
+            <h2 class="text-2xl font-black text-white mb-1">このゲームは有料です</h2>
+            <p class="text-xs text-slate-400 mb-4">G-coin で購入してアンロックしてください。（売上は作者に入ります）</p>
+            <button onclick="buyGame()" class="bg-gradient-to-r from-amber-500 to-pink-500 hover:opacity-90 text-slate-950 font-black px-6 py-3 rounded-xl text-sm shadow-xl transition">
+              💎 <span id="buy-price">100</span> G で購入して遊ぶ！
+            </button>
+          </div>
+        </div>
+
+        <!-- ログターミナル -->
+        <div class="mt-3 bg-[#0e0e0e] text-[#4af626] font-mono text-[11px] p-2.5 rounded-xl border border-[#333] h-20 overflow-y-auto whitespace-pre-wrap" id="terminal">--- ゲームエンジン ログ ---<br></div>
+
+        <!-- 説明 ＆ スコア登録 -->
+        <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          <div class="bg-[#252526] p-4 rounded-xl border border-[#333]">
+            <h2 class="font-bold text-indigo-400 mb-1">📋 操作方法・説明</h2>
+            <p id="game-desc" class="text-slate-300 whitespace-pre-wrap leading-relaxed">説明はありません。</p>
+          </div>
+
+          <div class="bg-[#252526] p-4 rounded-xl border border-[#333]">
+            <h2 class="font-bold text-yellow-400 mb-1">🏆 ハイスコア登録</h2>
+            <form id="score-form" class="flex gap-2 mt-2">
+              <input type="text" id="score-player" placeholder="名前" required class="w-1/3 bg-[#1e1e1e] border border-[#444] px-2.5 py-1 rounded text-white outline-none">
+              <input type="number" id="score-value" placeholder="スコア" required class="w-1/3 bg-[#1e1e1e] border border-[#444] px-2.5 py-1 rounded text-white outline-none">
+              <button type="submit" class="w-1/3 bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-bold px-2 py-1 rounded">登録</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- ⭐ レビュー・評価セクション -->
+        <div class="mt-4 bg-[#252526] p-5 rounded-xl border border-[#333] text-xs">
+          <div class="flex flex-wrap justify-between items-center border-b border-[#333] pb-3 mb-4">
+            <div class="flex items-center gap-3">
+              <h2 class="font-black text-sm text-amber-400 flex items-center gap-1">
+                ⭐ プレイヤーレビュー & 評価
+              </h2>
+              <span id="review-summary-text" class="text-slate-400 font-mono text-[11px]"></span>
+            </div>
+            <div id="star-average-display" class="text-amber-400 font-black text-base flex items-center gap-1 font-mono">
+              ⭐ <span id="big-avg-star">0.0</span> / 5.0
+            </div>
+          </div>
+
+          <!-- レビュー投稿フォーム -->
+          <form id="review-form" class="bg-[#1e1e1e] p-4 rounded-xl border border-[#333] mb-4 space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-slate-300">あなたの評価:</span>
+                <div id="star-selector" class="flex items-center gap-1 text-xl cursor-pointer select-none">
+                  <span class="star-btn text-amber-400 hover:scale-125 transition" data-val="1">★</span>
+                  <span class="star-btn text-amber-400 hover:scale-125 transition" data-val="2">★</span>
+                  <span class="star-btn text-amber-400 hover:scale-125 transition" data-val="3">★</span>
+                  <span class="star-btn text-amber-400 hover:scale-125 transition" data-val="4">★</span>
+                  <span class="star-btn text-amber-400 hover:scale-125 transition" data-val="5">★</span>
+                </div>
+                <span id="selected-star-label" class="font-bold text-amber-400 font-mono ml-1">5 星</span>
+              </div>
+              <input type="text" id="review-user-name" placeholder="投稿者名（未入力時はアカウント名）" class="bg-[#2d2d2d] border border-[#444] px-3 py-1.5 rounded-lg text-white text-xs outline-none w-56">
+            </div>
+
+            <div class="flex gap-2">
+              <textarea id="review-comment" rows="2" placeholder="ゲームをプレイした感想や改善点などを書いてみよう！" required class="flex-1 bg-[#2d2d2d] border border-[#444] p-2.5 rounded-lg text-white text-xs outline-none focus:border-amber-400"></textarea>
+              <button type="submit" id="submit-review-btn" class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:opacity-95 text-slate-950 font-black px-5 py-2 rounded-lg text-xs shadow transition whitespace-nowrap">
+                ⭐ レビュー投稿
+              </button>
+            </div>
+          </form>
+
+          <!-- レビュー一覧 -->
+          <div id="reviews-list" class="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+            <p class="text-slate-500 text-center py-4">まだレビューはありません。最初のレビューを投稿してみましょう！</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 右サイドバー（ランキング ＆ チャット） -->
+      <div class="lg:col-span-1 space-y-4 text-xs">
+        <div class="bg-[#252526] border border-[#333] rounded-xl p-4 h-[220px] flex flex-col">
+          <h2 class="font-bold text-yellow-400 border-b border-[#333] pb-2 mb-2">🏆 ランキング</h2>
+          <div id="leaderboard-list" class="flex-1 overflow-y-auto space-y-1 font-mono"></div>
+        </div>
+
+        <div class="bg-[#252526] border border-[#333] rounded-xl p-4 h-[380px] flex flex-col">
+          <h2 class="font-bold text-indigo-400 border-b border-[#333] pb-2 mb-2">💬 ライブチャット</h2>
+          <div id="chat-messages" class="flex-1 overflow-y-auto space-y-2 pr-1"></div>
+          <form id="chat-form" class="mt-2 pt-2 border-t border-[#333] flex flex-col gap-1.5">
+            <input type="text" id="chat-user" placeholder="名前" required class="bg-[#1e1e1e] border border-[#444] px-2 py-1 rounded text-white outline-none">
+            <div class="flex gap-1.5">
+              <input type="text" id="chat-content" placeholder="コメントを入力..." required class="flex-1 bg-[#1e1e1e] border border-[#444] px-2 py-1 rounded text-white outline-none">
+              <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 px-3 py-1 rounded font-bold text-white">送信</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const proxyUrl = window.location.origin + '/supabase';
+    const supabase = window.supabase.createClient(proxyUrl, 'sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj');
+    const urlParams = new URLSearchParams(window.location.search);
+    const gameId = urlParams.get('id');
+
+    const terminal = document.getElementById('terminal');
+    const iframe = document.getElementById('preview-iframe');
+    const statusEl = document.getElementById('engine-status');
+    const mainArea = document.getElementById('main-player');
+    const fullscreenBtn = document.getElementById('fullscreen-btn');
+    const clearDataBtn = document.getElementById('clear-data-btn');
+
+    let esbuildReady = false;
+    let currentGame = null;
+    let currentUser = null;
+    let userCoins = 0;
+    let currentRating = 5;
+    let isPseudoFullscreen = false;
+
+    function log(msg) {
+      terminal.innerText += msg + '\n';
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    // 📱 iPhone / 非対応環境検知 & 擬似全画面（Pseudo-fullscreen）トグル
+    function isFullscreenSupported() {
+      // iOS / iPhone / iPad の Safari は div の requestFullscreen をサポートしない
+      const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+      return !isIOS && (Boolean(mainArea.requestFullscreen) || Boolean(mainArea.webkitRequestFullscreen));
+    }
+
+    function toggleFullscreen() {
+      // 擬似全画面モードのトグル
+      if (isPseudoFullscreen) {
+        exitPseudoFullscreen();
+        return;
+      }
+
+      // 標準のフルスクリーンが使える場合
+      if (isFullscreenSupported() && (document.fullscreenElement || document.webkitFullscreenElement)) {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        return;
+      }
+
+      // 標準フルスクリーンの試行
+      if (isFullscreenSupported()) {
+        try {
+          const req = mainArea.requestFullscreen || mainArea.webkitRequestFullscreen;
+          const promise = req.call(mainArea);
+          if (promise && promise.catch) {
+            promise.catch(() => enterPseudoFullscreen());
+          }
+        } catch (e) {
+          enterPseudoFullscreen();
+        }
+      } else {
+        // iPhone または未対応ブラウザは即座に擬似全画面モード！
+        enterPseudoFullscreen();
+      }
+    }
+
+    function enterPseudoFullscreen() {
+      isPseudoFullscreen = true;
+      mainArea.classList.add('pseudo-fullscreen');
+      document.body.style.overflow = 'hidden';
+      fullscreenBtn.innerHTML = '<span>✕</span> 全画面解除';
+      log("📱 iPhone/非対応環境を検知：擬似全画面モードに移行しました。");
+    }
+
+    function exitPseudoFullscreen() {
+      isPseudoFullscreen = false;
+      mainArea.classList.remove('pseudo-fullscreen');
+      document.body.style.overflow = '';
+      fullscreenBtn.innerHTML = '<span>⛶</span> 全画面表示';
+      log("全画面表示を解除しました。");
+    }
+
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+    // 通常のfullscreenchangeイベント監視
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement) {
+        fullscreenBtn.innerHTML = '<span>⛶</span> 全画面表示';
+      } else {
+        fullscreenBtn.innerHTML = '<span>✕</span> 全画面解除';
+      }
+    });
+    document.addEventListener('webkitfullscreenchange', () => {
+      if (!document.webkitFullscreenElement) {
+        fullscreenBtn.innerHTML = '<span>⛶</span> 全画面表示';
+      } else {
+        fullscreenBtn.innerHTML = '<span>✕</span> 全画面解除';
+      }
+    });
+
+    // ESCキーで擬似全画面を解除
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && isPseudoFullscreen) {
+        exitPseudoFullscreen();
+      }
+    });
+
+    // セーブデータ消去処理
+    clearDataBtn.addEventListener('click', () => {
+      if (!iframe.srcdoc) return alert("ゲームが読み込まれていません。");
+      if (confirm("セーブデータ（localStorage）を削除して再読み込みしますか？")) {
+        try {
+          const iframeWin = iframe.contentWindow;
+          if (iframeWin) {
+            iframeWin.localStorage.clear();
+            iframeWin.sessionStorage.clear();
+            const currentDoc = iframe.srcdoc;
+            iframe.srcdoc = '';
+            setTimeout(() => {
+              iframe.srcdoc = currentDoc;
+              log("🗑️ セーブデータを削除し、ゲームをリセットしました。");
+            }, 50);
+          }
+        } catch (e) {
+          log("❌ セーブデータ消去失敗: " + e.message);
+        }
+      }
+    });
+
+    // プレビュー内エラー検知
+    window.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'error') {
+        log(`❌ [ゲーム内エラー] ${e.data.msg}`);
+      }
+    });
+
+    // ★ esbuild-wasm 初期化 ★
+    async function initEsbuild() {
+      try {
+        await esbuild.initialize({
+          wasmURL: 'https://cdn.jsdelivr.net/npm/esbuild-wasm@0.19.11/esbuild.wasm'
+        });
+        esbuildReady = true;
+        statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-500"></span> ゲームエンジン準備完了';
+        log("✅ esbuild-wasm の初期化が完了しました。");
+        loadAndRunGame();
+      } catch (e) {
+        log("❌ esbuild 初期化失敗: " + e.message);
+      }
+    }
+
+    // ゲーム情報取得 ＆ 実行
+    async function loadAndRunGame() {
+      if (!gameId) return;
+      const { data: game, error } = await supabase.from('games').select('*').eq('id', gameId).single();
+      if (error || !game) return alert('ゲームが見つかりませんでした');
+      currentGame = game;
+
+      document.getElementById('game-title').innerText = game.title;
+      document.getElementById('game-author').innerText = `by ${game.author_email || 'guest'}`;
+      document.getElementById('game-desc').innerText = game.description || '説明はありません。';
+      document.getElementById('like-count').innerText = game.likes_count || 0;
+
+      // タイトルサムネイル（中央揃え・右上寄りを防止）
+      if (game.thumbnail_url) {
+        const thumbCont = document.getElementById('title-thumb-container');
+        const thumbImg = document.getElementById('title-thumb-img');
+        thumbImg.src = game.thumbnail_url;
+        thumbCont.classList.remove('hidden');
+      }
+
+      const priceBadge = document.getElementById('price-badge');
+      if (game.price_coins > 0) {
+        priceBadge.className = 'text-xs font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded';
+        priceBadge.innerText = `💎 ${game.price_coins} G`;
+      } else {
+        priceBadge.className = 'text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 rounded';
+        priceBadge.innerText = 'FREE';
+      }
+
+      // ユーザー確認
+      const { data: { user } } = await supabase.auth.getUser();
+      currentUser = user;
+      if (user) {
+        if (user.email === game.author_email) document.getElementById('author-controls').classList.remove('hidden');
+        const { data: prof } = await supabase.from('profiles').select('*').eq('email', user.email).single();
+        if (prof) userCoins = prof.coins || 0;
+        document.getElementById('review-user-name').value = prof?.username || user.email.split('@')[0];
+      }
+
+      // 有料ロックチェック
+      if (game.price_coins > 0) {
+        let isPurchased = false;
+        if (user) {
+          if (user.email === game.author_email) isPurchased = true;
+          else {
+            const { data: purchase } = await supabase.from('purchases').select('*').eq('user_email', user.email).eq('game_id', gameId).single();
+            if (purchase) isPurchased = true;
+          }
+        }
+        if (!isPurchased) {
+          document.getElementById('lock-overlay').classList.remove('hidden');
+          document.getElementById('buy-price').innerText = game.price_coins;
+          return;
+        }
+      }
+
+      // ★ ゲームデータの取得（HTMLまたはZip） ★
+      log(`📦 ゲームデータを取得中: ${game.title}`);
+      let targetUrl = game.entry_url;
+      if (targetUrl && targetUrl.includes('supabase.co')) {
+        targetUrl = targetUrl.replace(/https:\/\/[^/]+\.supabase\.co/, window.location.origin + '/supabase');
+      }
+
+      try {
+        const response = await fetch(targetUrl);
+        const textData = await response.text();
+
+        // もしHTMLファイルなら直接実行、Zipファイルバイナリならエンジンで解凍・バンドル
+        if (textData.includes('<!DOCTYPE html>') || textData.includes('<html')) {
+          log("⚡ 単一HTMLゲームを検出。展開して実行します...");
+          iframe.srcdoc = textData;
+          log("🚀 ゲーム起動完了！");
+        } else {
+          // Zipバイナリの展開処理
+          const blobRes = await fetch(targetUrl);
+          const blob = await blobRes.blob();
+          await processZipBlob(blob);
+        }
+      } catch (err) {
+        log(`❌ ゲーム読み込み失敗: ${err.message}`);
+      }
+
+      supabase.from('games').update({ play_count: (game.play_count || 0) + 1 }).eq('id', gameId).then();
+      loadScores();
+      loadMessages();
+      loadReviews();
+    }
+
+    // ★★★ Zipの展開・バンドル（index.html自動補完付き） ★★★
+    async function processZipBlob(blobFile) {
+      log(`⚡ esbuild でZipを展開・バンドル中...`);
+      try {
+        const zip = await JSZip.loadAsync(blobFile);
+        const files = {};
+        const paths = Object.keys(zip.files);
+
+        let prefix = '';
+        const rootFolders = new Set(paths.map(p => p.split('/')[0]).filter(Boolean));
+        if (rootFolders.size === 1 && paths.some(p => p.endsWith('index.html'))) {
+          prefix = Array.from(rootFolders)[0] + '/';
+        }
+
+        for (const [path, entry] of Object.entries(zip.files)) {
+          if (entry.dir) continue;
+          let cleanPath = prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path;
+          files[cleanPath] = await entry.async('text');
+        }
+
+        let html = files['index.html'] || files['public/index.html'];
+
+        // 🌟 index.html がない場合でも Vite/React/SPA 等のときは自動で index.html を生成してバンドルエラーを無くす
+        if (!html) {
+          log('ℹ️ index.html が見つかりません。Vite/React用 index.html を自動生成します...');
+          html = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>${currentGame?.title || 'Game'}</title>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; }
+    #root, #app { width: 100%; height: 100%; }
+  </style>
+</head>
+<body class="bg-black text-white m-0 p-0 overflow-hidden">
+  <div id="root"></div>
+  <div id="app"></div>
+</body>
+</html>`;
+          files['index.html'] = html;
+        }
+
+        const entryCandidates = [
+          'src/main.tsx', 'src/main.jsx', 'src/index.tsx', 'src/index.jsx', 'src/App.tsx', 'src/App.jsx',
+          'src/main.ts', 'src/main.js', 'src/index.ts', 'src/index.js',
+          'main.tsx', 'main.jsx', 'index.tsx', 'index.jsx', 'App.tsx', 'App.jsx',
+          'main.ts', 'main.js', 'index.ts', 'index.js'
+        ];
+        let entryPath = entryCandidates.find(e => files[e] !== undefined);
+
+        if (!entryPath) {
+          entryPath = Object.keys(files).find(p => p.endsWith('.tsx') || p.endsWith('.jsx'));
+        }
+
+        if (!entryPath) {
+          // TSXなしの通常の静的HTMLゲーム
+          iframe.srcdoc = html;
+          log('🚀 静的ゲーム起動完了！');
+          return;
+        }
+
+        log(`⚡ esbuild バンドル処理中 (${entryPath})...`);
+
+        const zipPlugin = {
+          name: 'zip-vfs',
+          setup(build) {
+            build.onResolve({ filter: /.*/ }, args => {
+              let target = args.path.startsWith('/') ? args.path.slice(1) : args.path;
+              const isRelative = args.path.startsWith('.');
+              const isAbsoluteLocal = files[target] !== undefined;
+
+              if (isRelative || isAbsoluteLocal || args.kind === 'entry-point') {
+                if (args.importer) {
+                  const basePath = args.importer.split('/').slice(0, -1).join('/');
+                  const rawPath = basePath ? basePath + '/' + args.path : args.path;
+                  const parts = rawPath.split('/');
+                  const stack = [];
+                  for (const p of parts) {
+                    if (p === '.' || p === '') continue;
+                    if (p === '..') stack.pop();
+                    else stack.push(p);
+                  }
+                  target = stack.join('/');
+                }
+
+                const exts = ['', '.tsx', '.ts', '.jsx', '.js', '.css', '/index.tsx', '/index.ts', '/index.jsx', '/index.js'];
+                for (const ext of exts) {
+                  if (files[target + ext] !== undefined) {
+                    return { path: target + ext, namespace: 'zip-vfs' };
+                  }
+                }
+                return { path: target, namespace: 'zip-vfs' };
+              }
+
+              let pkg = args.path;
+              return { path: `https://esm.sh/${pkg}`, external: true };
+            });
+
+            build.onLoad({ filter: /.*/, namespace: 'zip-vfs' }, args => {
+              const content = files[args.path];
+              if (content === undefined) {
+                return { errors: [{ text: `File not found in zip: ${args.path}` }] };
+              }
+
+              if (args.path.endsWith('.css')) {
+                const escapedCss = JSON.stringify(content);
+                const js = `
+                  const style = document.createElement('style');
+                  style.textContent = ${escapedCss};
+                  document.head.appendChild(style);
+                `;
+                return { contents: js, loader: 'js' };
+              }
+
+              let loader = 'js';
+              if (args.path.endsWith('.tsx')) loader = 'tsx';
+              else if (args.path.endsWith('.ts')) loader = 'ts';
+              else if (args.path.endsWith('.jsx')) loader = 'jsx';
+
+              return { contents: content, loader: loader };
+            });
+          }
+        };
+
+        const result = await esbuild.build({
+          entryPoints: [entryPath],
+          bundle: true,
+          format: 'esm',
+          plugins: [zipPlugin],
+          write: false,
+          jsx: 'automatic',
+          jsxImportSource: 'react'
+        });
+
+        const bundledJs = result.outputFiles[0].text;
+        log('🔗 html に JS を注入中...');
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const head = doc.head;
+
+        const tailwindScript = doc.createElement('script');
+        tailwindScript.src = "https://cdn.tailwindcss.com";
+        head.appendChild(tailwindScript);
+
+        const scriptEl = doc.createElement('script');
+        scriptEl.type = 'module';
+        scriptEl.textContent = bundledJs;
+
+        doc.querySelectorAll('script[type="module"]').forEach(s => s.remove());
+        doc.body.appendChild(scriptEl);
+
+        const errScript = doc.createElement('script');
+        errScript.textContent = `
+          window.onerror = function(msg, url, line) {
+            window.parent.postMessage({ type: 'error', msg: msg + ' (Line: ' + line + ')' }, '*');
+          };
+        `;
+        head.appendChild(errScript);
+
+        iframe.srcdoc = doc.documentElement.outerHTML;
+        log('🚀 ゲーム起動完了！遊べます！');
+
+      } catch (err) {
+        log(`❌ バンドルエラー: ${err.message}`);
+      }
+    }
+
+    // 💰 購入処理（作者の手元にコインが入るよう改善！）
+    window.buyGame = async () => {
+      if (!currentUser) return window.location.href = 'index.html';
+      if (userCoins < currentGame.price_coins) return alert(`コイン不足！(所持: ${userCoins} G)`);
+      if (!confirm(`${currentGame.price_coins} G で購入しますか？`)) return;
+
+      const price = currentGame.price_coins;
+
+      // 1. 購入者のコインを減額
+      await supabase.from('profiles').update({ coins: userCoins - price }).eq('email', currentUser.email);
+      await supabase.from('purchases').insert({ user_email: currentUser.email, game_id: gameId });
+      userCoins -= price;
+
+      // 2. 作者の手元にコインを付与！
+      if (currentGame.author_email) {
+        try {
+          const { data: authorProf } = await supabase.from('profiles').select('coins').eq('email', currentGame.author_email).single();
+          const authorCoins = (authorProf?.coins || 0) + price;
+          await supabase.from('profiles').update({ coins: authorCoins }).eq('email', currentGame.author_email);
+        } catch (e) {
+          console.warn('作者コイン加算:', e);
+        }
+      }
+
+      alert('🎉 購入完了！作者にコインが支払われました。');
+      document.getElementById('lock-overlay').classList.add('hidden');
+      loadAndRunGame();
+    };
+
+    // 🪙 投げ銭処理（作者の手元にコインが入るよう改善！）
+    window.sendTip = async (amount = 30) => {
+      if (!currentUser) return alert('ログインが必要です！');
+      if (userCoins < amount) return alert('コインが足りません！');
+      if (!confirm(`作者に ${amount} G 投げ銭しますか？`)) return;
+
+      // 1. 送信者のコインを減額
+      await supabase.from('profiles').update({ coins: userCoins - amount }).eq('email', currentUser.email);
+      userCoins -= amount;
+
+      // 2. 作者の手元にコインを加算！
+      if (currentGame.author_email) {
+        try {
+          const { data: authorProf } = await supabase.from('profiles').select('coins').eq('email', currentGame.author_email).single();
+          const authorCoins = (authorProf?.coins || 0) + amount;
+          await supabase.from('profiles').update({ coins: authorCoins }).eq('email', currentGame.author_email);
+        } catch (e) {
+          console.warn('作者投げ銭加算:', e);
+        }
+      }
+
+      // 3. チャット通知
+      await supabase.from('messages').insert({
+        game_id: gameId,
+        user_name: '🪙 SYSTEM::gold',
+        content: `🎉 ${currentUser.email.split('@')[0]} さんが作者に ${amount} G 投げ銭しました！作者の残高に加算されました。`
+      });
+
+      alert(`🎉 作者への ${amount} G 投げ銭が完了しました！作者の手元にコインが入りました。`);
+      loadMessages();
+    };
+
+    // 削除
+    window.deleteGame = async () => {
+      if (!confirm('削除しますか？')) return;
+      await supabase.from('games').delete().eq('id', gameId);
+      window.location.href = 'index.html';
+    };
+
+    // いいね
+    window.addLike = async () => {
+      const { data: g } = await supabase.from('games').select('likes_count').eq('id', gameId).single();
+      const next = (g?.likes_count || 0) + 1;
+      await supabase.from('games').update({ likes_count: next }).eq('id', gameId);
+      document.getElementById('like-count').innerText = next;
+    };
+
+    // ランキング
+    async function loadScores() {
+      const { data: scores } = await supabase.from('leaderboards').select('*').eq('game_id', gameId).order('score', { ascending: false }).limit(10);
+      const list = document.getElementById('leaderboard-list');
+      if (!scores || scores.length === 0) return list.innerHTML = '<p class="text-slate-500 text-center">スコアなし</p>';
+      list.innerHTML = scores.map((s, idx) => `
+        <div class="flex justify-between items-center bg-[#1e1e1e] p-1.5 rounded border border-[#333]">
+          <span class="text-slate-400">#${idx+1} ${s.player_name}</span>
+          <span class="font-bold text-yellow-500">${s.score}</span>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('score-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const player_name = document.getElementById('score-player').value;
+      const score = parseInt(document.getElementById('score-value').value);
+      await supabase.from('leaderboards').insert({ game_id: gameId, player_name, score });
+      document.getElementById('score-value').value = '';
+      loadScores();
+    });
+
+    // チャット
+    async function loadMessages() {
+      const { data: msgs } = await supabase.from('messages').select('*').eq('game_id', gameId).order('created_at', { ascending: true });
+      const container = document.getElementById('chat-messages');
+      if (!msgs || msgs.length === 0) return container.innerHTML = '<p class="text-slate-500 text-center">コメントなし</p>';
+      container.innerHTML = msgs.map(m => `
+        <div class="bg-[#1e1e1e] p-2 rounded border border-[#333]">
+          <span class="font-bold text-indigo-400">${m.user_name.split('::')[0]}</span>
+          <p class="text-slate-200 mt-0.5 break-words">${m.content}</p>
+        </div>
+      `).join('');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    document.getElementById('chat-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const user = document.getElementById('chat-user').value;
+      const content = document.getElementById('chat-content').value;
+      await supabase.from('messages').insert({ game_id: gameId, user_name: user, content });
+      document.getElementById('chat-content').value = '';
+      loadMessages();
+    });
+
+    // ⭐⭐⭐ レビュー & 評価機能 ⭐⭐⭐
+    const starButtons = document.querySelectorAll('.star-btn');
+    const starLabel = document.getElementById('selected-star-label');
+
+    function updateStarUI(val) {
+      currentRating = val;
+      starLabel.innerText = `${val} 星`;
+      starButtons.forEach(btn => {
+        const btnVal = parseInt(btn.getAttribute('data-val'));
+        if (btnVal <= val) {
+          btn.className = 'star-btn text-amber-400 hover:scale-125 transition';
+          btn.innerText = '★';
+        } else {
+          btn.className = 'star-btn text-slate-600 hover:scale-125 transition';
+          btn.innerText = '☆';
+        }
+      });
+    }
+
+    starButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const val = parseInt(btn.getAttribute('data-val'));
+        updateStarUI(val);
+      });
+    });
+
+    async function loadReviews() {
+      let reviews = [];
+      // 1. Supabaseから取得試行
+      try {
+        const { data, error } = await supabase.from('reviews').select('*').eq('game_id', gameId).order('created_at', { ascending: false });
+        if (!error && data) reviews = data;
+      } catch (err) {
+        console.warn('Supabase reviews table not available:', err);
+      }
+
+      // 2. サーバーAPIフォールバック
+      if (reviews.length === 0) {
+        try {
+          const res = await fetch(`/api/reviews?game_id=${gameId}`);
+          if (res.ok) {
+            const apiData = await res.json();
+            if (apiData && apiData.length > 0) reviews = apiData;
+          }
+        } catch (e) {}
+      }
+
+      // 3. localStorageフォールバック
+      if (reviews.length === 0) {
+        try {
+          const local = JSON.parse(localStorage.getItem(`ghub_rev_${gameId}`) || '[]');
+          reviews = local;
+        } catch (e) {}
+      }
+
+      renderReviews(reviews);
+    }
+
+    function renderReviews(reviews) {
+      const listEl = document.getElementById('reviews-list');
+      const countEl = document.getElementById('rating-count-val');
+      const avgBadgeEl = document.getElementById('avg-rating-val');
+      const bigAvgEl = document.getElementById('big-avg-star');
+      const summaryText = document.getElementById('review-summary-text');
+
+      if (!reviews || reviews.length === 0) {
+        countEl.innerText = '0';
+        avgBadgeEl.innerText = '-';
+        bigAvgEl.innerText = '0.0';
+        summaryText.innerText = 'まだレビューはありません';
+        listEl.innerHTML = '<p class="text-slate-500 text-center py-4">まだレビューはありません。最初のレビューを投稿してみましょう！</p>';
+        return;
+      }
+
+      const total = reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0);
+      const avg = (total / reviews.length).toFixed(1);
+
+      countEl.innerText = reviews.length;
+      avgBadgeEl.innerText = avg;
+      bigAvgEl.innerText = avg;
+      summaryText.innerText = `全 ${reviews.length} 件の評価`;
+
+      listEl.innerHTML = reviews.map(r => {
+        const starCount = Math.min(5, Math.max(1, Math.round(Number(r.rating) || 5)));
+        const starsStr = '★'.repeat(starCount) + '☆'.repeat(5 - starCount);
+        const dateStr = r.created_at ? new Date(r.created_at).toLocaleDateString('ja-JP') : '';
+
+        return `
+          <div class="bg-[#1e1e1e] p-3 rounded-xl border border-[#333] space-y-1">
+            <div class="flex justify-between items-center">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-slate-200">${r.user_name || 'ゲスト'}</span>
+                <span class="text-amber-400 font-mono tracking-wider text-xs">${starsStr}</span>
+                <span class="text-amber-400/80 font-mono text-[10px] font-bold">${r.rating} 点</span>
+              </div>
+              <span class="text-slate-500 font-mono text-[10px]">${dateStr}</span>
+            </div>
+            <p class="text-slate-300 whitespace-pre-wrap leading-relaxed text-xs mt-1">${r.comment || ''}</p>
+          </div>
+        `;
+      }).join('');
+    }
+
+    document.getElementById('review-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const userNameInput = document.getElementById('review-user-name').value.trim();
+      const commentInput = document.getElementById('review-comment').value.trim();
+      const btn = document.getElementById('submit-review-btn');
+
+      if (!commentInput) return alert('レビュー内容を入力してください。');
+
+      const userName = userNameInput || (currentUser ? currentUser.email.split('@')[0] : 'ゲストプレイヤー');
+      const userEmail = currentUser ? currentUser.email : '';
+
+      btn.disabled = true;
+      btn.innerText = '投稿中...';
+
+      const reviewPayload = {
+        game_id: gameId,
+        user_name: userName,
+        user_email: userEmail,
+        rating: currentRating,
+        comment: commentInput,
+        created_at: new Date().toISOString()
+      };
+
+      // 1. Supabaseへ挿入試行
+      let saved = false;
+      try {
+        const { error } = await supabase.from('reviews').insert(reviewPayload);
+        if (!error) saved = true;
+      } catch (err) {}
+
+      // 2. サーバーAPI保存
+      try {
+        const res = await fetch('/api/reviews', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(reviewPayload)
+        });
+        if (res.ok) saved = true;
+      } catch (err) {}
+
+      // 3. localStorageにも二重保存（オフライン・テーブル不在時も確実に永続化）
+      try {
+        const local = JSON.parse(localStorage.getItem(`ghub_rev_${gameId}`) || '[]');
+        local.unshift(reviewPayload);
+        localStorage.setItem(`ghub_rev_${gameId}`, JSON.stringify(local));
+      } catch (err) {}
+
+      btn.disabled = false;
+      btn.innerText = '⭐ レビュー投稿';
+      document.getElementById('review-comment').value = '';
+      alert('⭐ レビューを投稿しました！ありがとうございます。');
+      loadReviews();
+    });
+
+    // 起動
+    initEsbuild();
+  </script>
+</body>
+</html>

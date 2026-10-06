@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>プロフィール - G-HUB</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
+</head>
+<body class="bg-[#0b0f19] text-white min-h-screen p-6 font-sans">
+  <div class="max-w-5xl mx-auto space-y-6">
+    
+    <div class="flex justify-between items-center border-b border-slate-800 pb-4">
+      <a href="index.html" class="text-xs text-indigo-400 hover:underline font-bold">← トップへ戻る</a>
+      <h1 class="text-xl font-black bg-gradient-to-r from-indigo-400 to-pink-400 bg-clip-text text-transparent">USER PROFILE</h1>
+    </div>
+
+    <!-- プロフィールカード -->
+    <div class="bg-[#111827] border border-slate-800 p-6 rounded-3xl shadow-2xl flex flex-col md:flex-row items-center gap-6">
+      <div class="w-24 h-24 rounded-full bg-gradient-to-tr from-indigo-600 to-pink-500 flex items-center justify-center text-4xl shadow-xl border-2 border-white/20">
+        👤
+      </div>
+
+      <div class="flex-1 text-center md:text-left space-y-2">
+        <div class="flex flex-wrap items-center justify-center md:justify-start gap-2">
+          <h2 id="prof-name" class="text-2xl font-black text-white">読み込み中...</h2>
+          <span id="prof-streak" class="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs px-2.5 py-0.5 rounded-full font-bold">🔥 1日連続</span>
+        </div>
+        <p id="prof-email" class="text-xs text-slate-500 font-mono"></p>
+        <p id="prof-bio" class="text-xs text-slate-300 max-w-xl">自己紹介を読み込み中...</p>
+      </div>
+
+      <div class="flex md:flex-col gap-2">
+        <button onclick="openEditModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition">
+          ✏️ 編集
+        </button>
+      </div>
+    </div>
+
+    <!-- ステータスグリッド -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+      <div class="bg-[#111827] p-4 rounded-2xl border border-slate-800">
+        <span class="text-xs text-slate-500 font-bold block mb-1">所持コイン（売上・投げ銭含む）</span>
+        <span id="stat-coins" class="text-xl font-black text-amber-400 font-mono">0 G</span>
+      </div>
+      <div class="bg-[#111827] p-4 rounded-2xl border border-slate-800">
+        <span class="text-xs text-slate-500 font-bold block mb-1">プレイヤーLv</span>
+        <span id="stat-plvl" class="text-xl font-black text-emerald-400 font-mono">Lv.1</span>
+      </div>
+      <div class="bg-[#111827] p-4 rounded-2xl border border-slate-800">
+        <span class="text-xs text-slate-500 font-bold block mb-1">開発者Lv</span>
+        <span id="stat-dlvl" class="text-xl font-black text-purple-400 font-mono">Lv.1</span>
+      </div>
+      <div class="bg-[#111827] p-4 rounded-2xl border border-slate-800">
+        <span class="text-xs text-slate-500 font-bold block mb-1">投稿ゲーム数</span>
+        <span id="stat-games" class="text-xl font-black text-indigo-400 font-mono">0 本</span>
+      </div>
+    </div>
+
+    <!-- 投稿ゲーム一覧 -->
+    <div class="space-y-4">
+      <h3 class="text-lg font-black text-slate-200">🛠️ あなたが公開したゲーム</h3>
+      <div id="my-games-list" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <p class="text-slate-500 text-xs col-span-3">ゲームを読み込み中...</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- プロフィール編集モーダル -->
+  <div id="edit-modal" class="fixed inset-0 bg-black/80 flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-[#111827] border border-slate-700 p-6 rounded-3xl max-w-sm w-full space-y-4 shadow-2xl">
+      <h3 class="font-bold text-sm text-indigo-400">プロフィール編集</h3>
+      <div>
+        <label class="block text-xs font-bold mb-1">ユーザー名</label>
+        <input type="text" id="edit-username" class="w-full bg-slate-950 border border-slate-700 p-2 rounded-xl text-xs outline-none">
+      </div>
+      <div>
+        <label class="block text-xs font-bold mb-1">自己紹介</label>
+        <textarea id="edit-bio" rows="3" class="w-full bg-slate-950 border border-slate-700 p-2 rounded-xl text-xs outline-none"></textarea>
+      </div>
+      <button onclick="saveProfile()" class="w-full bg-indigo-600 hover:bg-indigo-500 font-bold py-2 rounded-xl text-xs">保存する</button>
+      <button onclick="closeEditModal()" class="w-full text-slate-500 text-xs">閉じる</button>
+    </div>
+  </div>
+
+  <script>
+    const proxyUrl = window.location.origin + '/supabase';
+    const supabase = window.supabase.createClient(proxyUrl, 'sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj');
+    let currentUser = null;
+
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        alert('ログインが必要です');
+        window.location.href = 'index.html';
+        return;
+      }
+      currentUser = user;
+      document.getElementById('prof-email').innerText = user.email;
+
+      // プロフィール取得
+      const { data: prof } = await supabase.from('profiles').select('*').eq('email', user.email).single();
+      if (prof) {
+        document.getElementById('prof-name').innerText = prof.username || user.email.split('@')[0];
+        document.getElementById('prof-bio').innerText = prof.bio || 'よろしくお願いします！';
+        document.getElementById('prof-streak').innerText = `🔥 ${prof.streak_count || 1}日連続`;
+        document.getElementById('stat-coins').innerText = `${prof.coins || 0} G`;
+        document.getElementById('stat-plvl').innerText = `Lv.${prof.player_level || 1}`;
+        document.getElementById('stat-dlvl').innerText = `Lv.${prof.dev_level || 1}`;
+
+        document.getElementById('edit-username').value = prof.username || user.email.split('@')[0];
+        document.getElementById('edit-bio').value = prof.bio || '';
+      }
+
+      // 投稿ゲーム取得
+      const { data: games } = await supabase.from('games').select('*').eq('author_email', user.email).order('created_at', { ascending: false });
+      const gamesList = document.getElementById('my-games-list');
+      document.getElementById('stat-games').innerText = `${games?.length || 0} 本`;
+
+      if (!games || games.length === 0) {
+        gamesList.innerHTML = '<p class="text-slate-500 text-xs col-span-3">まだ公開したゲームはありません。</p>';
+        return;
+      }
+
+      gamesList.innerHTML = games.map(g => `
+        <div class="bg-[#111827] border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <div>
+            <div class="aspect-video bg-slate-950 rounded-xl mb-3 overflow-hidden flex items-center justify-center w-full relative">
+              ${g.thumbnail_url 
+                ? `<img src="${g.thumbnail_url}" alt="${g.title}" class="w-full h-full object-cover object-center block" style="object-position: center center;">` 
+                : '<span class="text-3xl">🕹️</span>'}
+            </div>
+            <h4 class="font-bold text-sm text-slate-100">${g.title}</h4>
+            <div class="flex justify-between text-[11px] text-slate-400 mt-2 font-mono">
+              <span>❤️ ${g.likes_count || 0} いいね</span>
+              <span>🎮 ${g.play_count || 0} 回</span>
+            </div>
+          </div>
+          <a href="play.html?id=${g.id}" class="mt-3 block text-center bg-slate-800 hover:bg-slate-700 py-2 rounded-xl text-xs font-bold text-indigo-400 transition">
+            ゲームページを開く
+          </a>
+        </div>
+      `).join('');
+    }
+
+    window.openEditModal = () => document.getElementById('edit-modal').classList.remove('hidden');
+    window.closeEditModal = () => document.getElementById('edit-modal').classList.add('hidden');
+
+    window.saveProfile = async () => {
+      const username = document.getElementById('edit-username').value;
+      const bio = document.getElementById('edit-bio').value;
+
+      await supabase.from('profiles').update({ username, bio }).eq('email', currentUser.email);
+      alert('プロフィールを更新しました！');
+      closeEditModal();
+      init();
+    };
+
+    init();
+  </script>
+</body>
+</html>

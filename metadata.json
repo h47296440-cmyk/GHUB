@@ -1,0 +1,6 @@
+{
+  "name": "G-HUB",
+  "description": "Indie Gaming Platform for uploading, playing, and sharing indie games with G-AI concierge, ratings, and coin monetization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

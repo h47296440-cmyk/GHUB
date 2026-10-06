@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>G-HUB - Indie Game Platform</title>
+  <meta name="description" content="G-HUB - Indie Gaming Platform with Vite/React wasm bundler, Qwen AI concierge, and monetization." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
+</head>
+<body class="bg-slate-100/70 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen font-sans transition-colors duration-200">
+
+  <div class="max-w-7xl mx-auto px-4 py-6">
+    <!-- ナビゲーションバー -->
+    <header class="flex flex-wrap justify-between items-center gap-4 mb-6 bg-white dark:bg-[#111827] p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-sm dark:shadow-2xl">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-lg font-black shadow-md shadow-indigo-500/20">G</div>
+        <div>
+          <h1 class="text-xl font-black tracking-wider text-slate-900 dark:text-white">G-HUB</h1>
+          <p class="text-[10px] text-slate-400 font-mono tracking-widest uppercase">Indie Gaming Platform</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 text-xs font-semibold">
+        <!-- 所持コイン & ガチャ -->
+        <div id="coin-section" class="hidden flex items-center gap-2">
+          <div class="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-500/40 text-amber-700 dark:text-amber-400 px-3 py-1.5 rounded-xl font-bold">
+            <span id="coin-count">0</span> G
+          </div>
+          <button onclick="openGachaModal()" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl transition">
+            Gacha
+          </button>
+        </div>
+
+        <!-- テーマ切り替えトグル（Dark / Light） -->
+        <button onclick="toggleTheme()" id="theme-btn" class="p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition" title="テーマ切り替え">
+          <span id="theme-icon">🌙</span>
+        </button>
+
+        <button onclick="openFriendModal()" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3.5 py-1.5 rounded-xl transition">
+          Friends
+        </button>
+
+        <!-- ログイン / ユーザー情報 -->
+        <div id="auth-status">
+          <button onclick="openAuthModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl transition shadow-sm">
+            ログイン
+          </button>
+        </div>
+
+        <a href="upload.html" class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl shadow-md shadow-indigo-500/20 transition">
+          公開する
+        </a>
+      </div>
+    </header>
+
+    <!-- マイステータス盤 -->
+    <div id="my-profile-banner" class="hidden bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 p-5 rounded-2xl mb-6 shadow-sm dark:shadow-xl">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-indigo-50 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/30 flex items-center justify-center font-bold text-lg">
+            ID
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span id="dashboard-name" class="font-black text-slate-900 dark:text-white text-base">Guest</span>
+              <span id="dashboard-streak" class="bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/40 text-[11px] px-2 py-0.5 rounded font-mono font-bold">1 Day Streak</span>
+            </div>
+            <p id="dashboard-email" class="text-xs text-slate-400 font-mono mt-0.5"></p>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 text-xs">
+          <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-4 py-2 rounded-xl text-center">
+            <span class="text-[10px] text-slate-400 block font-bold uppercase">Balance</span>
+            <span id="dashboard-coins" class="text-sm font-black text-amber-600 dark:text-amber-400 font-mono">0 G</span>
+          </div>
+
+          <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-4 py-2 rounded-xl text-center">
+            <span class="text-[10px] text-slate-400 block font-bold uppercase">Player Level</span>
+            <span id="dashboard-plvl" class="text-sm font-black text-indigo-600 dark:text-indigo-400 font-mono">Lv.1</span>
+          </div>
+
+          <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-4 py-2 rounded-xl text-center">
+            <span class="text-[10px] text-slate-400 block font-bold uppercase">Creator Level</span>
+            <span id="dashboard-dlvl" class="text-sm font-black text-purple-600 dark:text-purple-400 font-mono">Lv.1</span>
+          </div>
+
+          <a href="profile.html" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2.5 rounded-xl transition shadow-sm">
+            マイページ →
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- お祭りバナー ＆ G-AI アシスタント -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      
+      <!-- G-HUB杯 -->
+      <div class="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 p-6 rounded-2xl flex flex-col justify-between shadow-sm dark:shadow-lg">
+        <div>
+          <span class="bg-indigo-50 dark:bg-indigo-950/80 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider">Event</span>
+          <h2 class="text-lg font-black text-slate-900 dark:text-white mt-2">第1回 G-HUB杯 「1分で遊べるゲーム」コンテスト</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">コンテストエントリー作品をプレイして投票しよう！</p>
+        </div>
+        <div class="mt-4">
+          <button onclick="filterEventGames()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-sm transition">
+            エントリー作品を一覧表示
+          </button>
+        </div>
+      </div>
+
+      <!-- G-AI アシスタント -->
+      <div class="bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 p-6 rounded-2xl flex flex-col justify-between shadow-sm dark:shadow-lg">
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded font-mono font-bold uppercase">AI Assistant</span>
+            <span class="text-[11px] text-slate-400 font-mono">Qwen 2.5 Coder</span>
+          </div>
+          <h3 class="text-lg font-black text-slate-900 dark:text-white mt-2">ゲームソムリエに相談</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">気分や好みを伝えると、最適なゲームをご案内します。</p>
+        </div>
+
+        <div class="mt-3">
+          <div class="flex gap-2">
+            <input type="text" id="ai-chat-input" placeholder="例: 集中して遊べるパズルゲームはある？" class="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl text-xs outline-none text-slate-800 dark:text-white focus:border-indigo-500">
+            <button onclick="askG_AI()" id="ai-chat-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition shadow-sm whitespace-nowrap">
+              質問する
+            </button>
+          </div>
+          <div id="ai-reply-box" class="hidden mt-3 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl">
+            <p id="ai-reply" class="text-xs text-slate-700 dark:text-slate-300 font-mono whitespace-pre-wrap leading-relaxed max-h-24 overflow-y-auto"></p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 検索 & フィルター -->
+    <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+      <div class="flex gap-1.5 overflow-x-auto w-full md:w-auto pb-2 md:pb-0" id="tag-filters">
+        <button onclick="setTag('All')" class="tag-btn active px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-sm transition">すべて</button>
+        <button onclick="setTag('Action')" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition">アクション</button>
+        <button onclick="setTag('Puzzle')" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition">パズル</button>
+        <button onclick="setTag('RPG')" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition">RPG</button>
+        <button onclick="filterPlatform('mobile')" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition">モバイル対応</button>
+      </div>
+
+      <div class="flex gap-2 w-full md:w-auto">
+        <input type="text" id="search-input" oninput="filterGames()" placeholder="タイトルを検索..." class="w-full md:w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3.5 py-2 rounded-xl text-xs outline-none focus:border-indigo-500">
+        <button onclick="toggleSort()" id="sort-btn" class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap">
+          人気順
+        </button>
+      </div>
+    </div>
+
+    <!-- ゲーム一覧グリッド -->
+    <div id="game-list" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+      <p class="text-slate-400 col-span-4 text-center py-10 font-mono text-xs">ゲームを読み込み中...</p>
+    </div>
+  </div>
+
+  <!-- ガチャモーダル -->
+  <div id="gacha-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 p-6 rounded-2xl max-w-sm w-full shadow-xl text-center">
+      <h2 class="text-lg font-black text-slate-900 dark:text-white mb-1">ネオンスキンガチャ</h2>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">1回 100 G（チャット名の装飾スタイル）</p>
+
+      <div id="gacha-display" class="bg-slate-50 dark:bg-slate-950 p-6 rounded-xl border border-slate-200 dark:border-slate-800 mb-4 flex items-center justify-center min-h-[90px]">
+        <span class="text-slate-400 text-xs">ボタンを押してスキンを獲得</span>
+      </div>
+
+      <button onclick="playGacha()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl text-xs transition mb-2 shadow-sm">
+        100 G で獲得する
+      </button>
+      <button onclick="closeGachaModal()" class="text-slate-400 hover:text-slate-600 text-xs py-1">閉じる</button>
+    </div>
+  </div>
+
+  <!-- フレンドモーダル -->
+  <div id="friend-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 p-6 rounded-2xl max-w-md w-full shadow-xl">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="text-base font-bold text-slate-900 dark:text-white">フレンド一覧</h2>
+        <button onclick="closeFriendModal()" class="text-slate-400 hover:text-slate-600 text-xs">閉じる</button>
+      </div>
+      <form id="friend-form" class="flex gap-2 mb-4">
+        <input type="email" id="friend-email" placeholder="メールアドレスを入力" required class="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 px-3 py-2 rounded-xl text-xs outline-none focus:border-indigo-500">
+        <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl text-xs shadow-sm">追加</button>
+      </form>
+      <div id="friends-list" class="space-y-1.5 max-h-60 overflow-y-auto"></div>
+    </div>
+  </div>
+
+  <!-- ログインモーダル -->
+  <div id="auth-modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-white dark:bg-[#111827] border border-slate-200 dark:border-slate-800 p-6 rounded-2xl max-w-sm w-full shadow-xl">
+      <h2 id="auth-title" class="text-base font-bold text-slate-900 dark:text-white mb-4">ログイン</h2>
+      <div class="space-y-3">
+        <input type="email" id="auth-email" placeholder="メールアドレス" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl text-xs outline-none focus:border-indigo-500">
+        <input type="password" id="auth-password" placeholder="パスワード" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl text-xs outline-none focus:border-indigo-500">
+        <button id="auth-submit-btn" onclick="handleAuth()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-2.5 rounded-xl font-bold text-xs transition shadow-sm">ログイン</button>
+      </div>
+      <div class="mt-4 text-center text-xs text-slate-400">
+        <button onclick="toggleAuthMode()" id="auth-toggle-btn" class="hover:text-indigo-600 underline">新規アカウント登録</button>
+      </div>
+      <button onclick="closeAuthModal()" class="mt-3 w-full text-slate-400 hover:text-slate-600 text-xs py-1">閉じる</button>
+    </div>
+  </div>
+
+  <script type="module">
+    const proxyUrl = window.location.origin + '/supabase';
+    const client = window.supabase.createClient(proxyUrl, 'sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj');
+    window.client = client;
+
+    let allGames = [];
+    let gameReviewsMap = {}; // ゲームごとの平均星評価キャッシュ
+    let currentTag = 'All';
+    let currentPlat = null;
+    let onlyEvent = false;
+    let currentSort = 'likes_count';
+    let currentUser = null;
+    let userCoins = 0;
+
+    // --- テーマ管理 (Dark / Light) ---
+    function initTheme() {
+      const saved = localStorage.getItem('ghub_theme') || 'dark';
+      applyTheme(saved);
+    }
+
+    function applyTheme(theme) {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.getElementById('theme-icon').innerText = '☀️';
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.getElementById('theme-icon').innerText = '🌙';
+      }
+      localStorage.setItem('ghub_theme', theme);
+    }
+
+    window.toggleTheme = () => {
+      const isDark = document.documentElement.classList.contains('dark');
+      applyTheme(isDark ? 'light' : 'dark');
+    };
+    initTheme();
+
+    // --- ゲーム一覧 & レビュー読み込み ---
+    async function loadGames() {
+      const { data } = await client.from('games').select('*').order(currentSort, { ascending: false });
+      allGames = data || [];
+      await loadReviewsSummary();
+      renderGames();
+    }
+
+    async function loadReviewsSummary() {
+      // Supabase または サーバー/ローカルから各ゲームのレビュー概要を取得
+      try {
+        const { data: revs } = await client.from('reviews').select('game_id, rating');
+        if (revs && revs.length > 0) {
+          const stats = {};
+          revs.forEach(r => {
+            if (!stats[r.game_id]) stats[r.game_id] = { total: 0, count: 0 };
+            stats[r.game_id].total += Number(r.rating) || 5;
+            stats[r.game_id].count += 1;
+          });
+          Object.keys(stats).forEach(gid => {
+            gameReviewsMap[gid] = (stats[gid].total / stats[gid].count).toFixed(1);
+          });
+        }
+      } catch (e) {
+        // フォールバック（localStorage）
+        allGames.forEach(g => {
+          try {
+            const loc = JSON.parse(localStorage.getItem(`ghub_rev_${g.id}`) || '[]');
+            if (loc.length > 0) {
+              const sum = loc.reduce((acc, cur) => acc + (Number(cur.rating) || 5), 0);
+              gameReviewsMap[g.id] = (sum / loc.length).toFixed(1);
+            }
+          } catch (err) {}
+        });
+      }
+    }
+
+    window.setTag = (tag) => {
+      currentTag = tag;
+      currentPlat = null;
+      onlyEvent = false;
+      document.querySelectorAll('.tag-btn').forEach(b => {
+        b.className = 'tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition';
+      });
+      event.target.className = 'tag-btn active px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-sm transition';
+      renderGames();
+    };
+
+    window.filterPlatform = (plat) => {
+      currentPlat = plat;
+      currentTag = 'All';
+      onlyEvent = false;
+      renderGames();
+    };
+
+    window.filterEventGames = () => {
+      onlyEvent = true;
+      currentTag = 'All';
+      currentPlat = null;
+      renderGames();
+    };
+
+    window.toggleSort = () => {
+      currentSort = currentSort === 'likes_count' ? 'created_at' : 'likes_count';
+      document.getElementById('sort-btn').innerText = currentSort === 'likes_count' ? '人気順' : '新着順';
+      loadGames();
+    };
+
+    window.filterGames = () => renderGames();
+
+    function renderGames() {
+      const q = document.getElementById('search-input').value.toLowerCase();
+      let filtered = allGames.filter(g => g.title.toLowerCase().includes(q));
+
+      if (onlyEvent) filtered = filtered.filter(g => g.is_event);
+      if (currentPlat) filtered = filtered.filter(g => (g.platforms || '').includes(currentPlat));
+      if (currentTag !== 'All') filtered = filtered.filter(g => g.tag === currentTag);
+
+      const list = document.getElementById('game-list');
+      if (filtered.length === 0) {
+        list.innerHTML = '<p class="text-slate-400 col-span-4 text-center py-10 font-mono text-xs">ゲームが見つかりませんでした。</p>';
+        return;
+      }
+
+      list.innerHTML = filtered.map(g => {
+        const plats = (g.platforms || 'pc').split(',').map(p => p === 'mobile' ? 'Mobile' : p === 'pad' ? 'Gamepad' : 'PC').join(' · ');
+        const avgStar = gameReviewsMap[g.id] || null;
+
+        return `
+          <a href="play.html?id=${g.id}" class="group bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden hover:border-indigo-500 hover:-translate-y-1 transition duration-200 block shadow-sm dark:shadow-lg relative">
+            ${g.is_event ? '<span class="absolute top-2 right-2 z-10 bg-indigo-600 text-white font-bold text-[9px] px-2 py-0.5 rounded shadow-sm">EVENT</span>' : ''}
+            
+            <!-- サムネイル枠：右上に寄らないよう object-center & center center 完全固定 -->
+            <div class="aspect-video relative overflow-hidden bg-slate-100 dark:bg-slate-950 flex items-center justify-center w-full">
+              ${g.thumbnail_url 
+                ? `<img src="${g.thumbnail_url}" alt="${g.title}" class="w-full h-full object-cover object-center block group-hover:scale-105 transition duration-300" style="object-position: center center;">`
+                : `<div class="text-slate-300 dark:text-slate-700 font-mono text-xs uppercase tracking-widest font-bold">No Image</div>`
+              }
+              
+              <!-- バッジ類 -->
+              <div class="absolute top-2 left-2 flex gap-1 z-10">
+                <span class="${(g.price_coins || 0) > 0 ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'} text-[9px] font-bold px-2 py-0.5 rounded shadow-sm">
+                  ${(g.price_coins || 0) > 0 ? `${g.price_coins} G` : 'FREE'}
+                </span>
+                <span class="bg-slate-900/60 dark:bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded backdrop-blur-sm">
+                  ${plats}
+                </span>
+              </div>
+
+              <span class="absolute bottom-2 left-2 bg-slate-900/60 dark:bg-black/60 text-slate-200 text-[9px] px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
+                ${g.tag || 'Game'}
+              </span>
+
+              ${avgStar ? `
+                <span class="absolute bottom-2 right-2 bg-slate-900/70 dark:bg-black/70 text-amber-400 text-[10px] px-2 py-0.5 rounded backdrop-blur-sm font-mono font-bold flex items-center gap-0.5">
+                  ⭐ ${avgStar}
+                </span>
+              ` : ''}
+            </div>
+
+            <div class="p-4">
+              <h2 class="font-bold text-sm text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition truncate">${g.title}</h2>
+              <p class="text-slate-500 dark:text-slate-400 text-xs mt-1 line-clamp-2 leading-relaxed">${g.description || '説明はありません。'}</p>
+              <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between text-[11px] text-slate-400 font-mono">
+                <span>❤️ Likes: ${g.likes_count || 0}</span>
+                <span>⭐ ${avgStar ? avgStar : '-'}</span>
+                <span>🎮 Plays: ${g.play_count || 0}</span>
+              </div>
+            </div>
+          </a>
+        `;
+      }).join('');
+    }
+
+    // --- G-AI アシスタント ---
+    window.askG_AI = async () => {
+      const q = document.getElementById('ai-chat-input').value;
+      if (!q) return alert('質問内容を入力してください');
+      
+      const btn = document.getElementById('ai-chat-btn');
+      const box = document.getElementById('ai-reply-box');
+      const replyEl = document.getElementById('ai-reply');
+
+      btn.disabled = true;
+      box.classList.remove('hidden');
+      replyEl.innerText = '分析中...';
+
+      const gameSummary = allGames.map(g => `・タイトル:${g.title}, タグ:${g.tag}, 説明:${g.description || 'なし'}`).join('\n');
+
+      try {
+        const res = await fetch('/ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemPrompt: 'You are G-AI, a concise and polite gaming concierge on G-HUB. Recommend games based on user request. Speak in natural Japanese.',
+            userPrompt: `ゲーム一覧:\n${gameSummary}\n\nリクエスト: ${q}`,
+            maxTokens: 500
+          })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        replyEl.innerText = data.reply;
+      } catch (err) {
+        replyEl.innerText = 'エラー: ' + err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
+    // --- ガチャシステム ---
+    const SKINS = [
+      { id: 'emerald', name: 'Emerald Style', class: 'text-emerald-500 font-bold' },
+      { id: 'purple', name: 'Cyber Purple', class: 'text-purple-500 font-bold' },
+      { id: 'gold', name: 'Gold Legend', class: 'text-amber-500 font-bold' },
+      { id: 'rainbow', name: 'Rainbow Neon', class: 'text-indigo-500 font-bold' }
+    ];
+
+    window.openGachaModal = () => document.getElementById('gacha-modal').classList.remove('hidden');
+    window.closeGachaModal = () => document.getElementById('gacha-modal').classList.add('hidden');
+
+    window.playGacha = async () => {
+      if (userCoins < 100) return alert('コインが不足しています');
+      const newCoins = userCoins - 100;
+      const wonSkin = SKINS[Math.floor(Math.random() * SKINS.length)];
+      await client.from('profiles').update({ coins: newCoins, equipped_skin: wonSkin.id }).eq('email', currentUser.email);
+      userCoins = newCoins;
+      document.getElementById('coin-count').innerText = newCoins;
+      document.getElementById('dashboard-coins').innerText = `${newCoins} G`;
+
+      document.getElementById('gacha-display').innerHTML = `
+        <div>
+          <span class="text-xs text-slate-400 block mb-1">獲得スタイル</span>
+          <span class="text-sm ${wonSkin.class}">${wonSkin.name}</span>
+        </div>
+      `;
+    };
+
+    // --- 認証＆ユーザーデータ管理 ---
+    async function checkUser() {
+      const { data: { user } } = await client.auth.getUser();
+      currentUser = user;
+      const statusDiv = document.getElementById('auth-status');
+
+      if (user) {
+        let { data: prof } = await client.from('profiles').select('*').eq('email', user.email).single();
+
+        if (!prof) {
+          const { data: newProf } = await client.from('profiles').insert({
+            email: user.email,
+            username: user.email.split('@')[0],
+            coins: 100,
+            player_level: 1,
+            player_exp: 0,
+            dev_level: 1,
+            dev_exp: 0,
+            streak_count: 1,
+            last_login: new Date().toISOString().split('T')[0]
+          }).select().single();
+          prof = newProf;
+        }
+
+        statusDiv.innerHTML = `
+          <a href="profile.html" class="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline">
+            ${prof?.username || user.email.split('@')[0]}
+          </a>
+          <button onclick="logout()" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 ml-2">ログアウト</button>
+        `;
+
+        if (prof) {
+          userCoins = prof.coins || 0;
+          document.getElementById('coin-section').classList.remove('hidden');
+          document.getElementById('coin-count').innerText = userCoins;
+
+          document.getElementById('my-profile-banner').classList.remove('hidden');
+          document.getElementById('dashboard-name').innerText = prof.username || user.email.split('@')[0];
+          document.getElementById('dashboard-email').innerText = user.email;
+          document.getElementById('dashboard-streak').innerText = `${prof.streak_count || 1} Day Streak`;
+          document.getElementById('dashboard-coins').innerText = `${userCoins} G`;
+          document.getElementById('dashboard-plvl').innerText = `Lv.${prof.player_level || 1}`;
+          document.getElementById('dashboard-dlvl').innerText = `Lv.${prof.dev_level || 1}`;
+        }
+      }
+    }
+
+    window.logout = async () => { await client.auth.signOut(); window.location.reload(); };
+
+    let isSignUp = false;
+    window.openAuthModal = () => document.getElementById('auth-modal').classList.remove('hidden');
+    window.closeAuthModal = () => document.getElementById('auth-modal').classList.add('hidden');
+    window.toggleAuthMode = () => {
+      isSignUp = !isSignUp;
+      document.getElementById('auth-title').innerText = isSignUp ? '新規登録' : 'ログイン';
+      document.getElementById('auth-submit-btn').innerText = isSignUp ? '登録' : 'ログイン';
+    };
+
+    window.handleAuth = async () => {
+      const email = document.getElementById('auth-email').value;
+      const password = document.getElementById('auth-password').value;
+      if (isSignUp) {
+        const { error } = await client.auth.signUp({ email, password });
+        if (error) alert(error.message);
+        else {
+          await client.from('profiles').insert({ email, coins: 100, player_level: 1, player_exp: 0, dev_level: 1, dev_exp: 0, streak_count: 1, last_login: new Date().toISOString().split('T')[0] });
+          window.location.reload();
+        }
+      } else {
+        const { error } = await client.auth.signInWithPassword({ email, password });
+        if (error) alert(error.message);
+        else window.location.reload();
+      }
+    };
+
+    window.openFriendModal = async () => {
+      if (!currentUser) return alert('ログインしてください');
+      document.getElementById('friend-modal').classList.remove('hidden');
+      loadFriends();
+    };
+    window.closeFriendModal = () => document.getElementById('friend-modal').classList.add('hidden');
+
+    async function loadFriends() {
+      const { data: friends } = await client.from('friends').select('*').eq('user_email', currentUser.email);
+      const list = document.getElementById('friends-list');
+      if (!friends || friends.length === 0) return list.innerHTML = '<p class="text-slate-400 text-xs text-center py-2">フレンドはいません</p>';
+      list.innerHTML = friends.map(f => `
+        <div class="bg-slate-50 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 flex justify-between items-center text-xs">
+          <span>${f.friend_email}</span>
+          <span class="text-indigo-600 dark:text-indigo-400 font-bold">Online</span>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('friend-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const friend_email = document.getElementById('friend-email').value;
+      if (friend_email === currentUser.email) return alert('自分自身は追加できません');
+      await client.from('friends').insert({ user_email: currentUser.email, friend_email });
+      document.getElementById('friend-email').value = '';
+      loadFriends();
+    });
+
+    loadGames();
+    checkUser();
+  </script>
+</body>
+</html>
