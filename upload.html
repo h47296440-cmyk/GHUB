@@ -26,20 +26,26 @@
       <div class="lg:col-span-1 flex flex-col gap-3 text-xs">
         <div id="drop-zone" class="border-2 border-dashed border-[#444] hover:border-indigo-500 rounded-xl p-5 text-center bg-[#2d2d2d] cursor-pointer transition">
           <p class="font-bold text-sm text-slate-200">📁 .zip または .html をドロップ</p>
-          <p class="text-[10px] text-slate-400 mt-1">Vite/React TSX も 通常HTMLも自動判別 (index.html自動補完)</p>
+          <p class="text-[10px] text-slate-400 mt-1">Vite/React TSX も 通常HTMLも自動判別 (index.html自動生成)</p>
           <input type="file" id="file-input" accept=".zip,.html" class="hidden">
         </div>
 
         <div id="status" class="p-2 rounded bg-[#2e7d32] text-center font-bold text-xs font-mono">エンジン準備中...</div>
 
-        <!-- サムネイルプレビュー表示枠（右上に偏らないよう中央揃え） -->
+        <!-- サムネイルプレビュー表示枠（中央揃え・右上寄りを完全防止） -->
         <div class="bg-[#1e1e1e] p-2.5 rounded-xl border border-[#333] flex items-center gap-3">
-          <div id="thumb-preview" class="w-16 h-12 bg-slate-900 border border-[#444] rounded flex items-center justify-center text-xs text-slate-500 overflow-hidden relative">
+          <div id="thumb-preview" class="w-16 h-12 bg-slate-900 border border-[#444] rounded flex items-center justify-center text-xs text-slate-500 overflow-hidden relative shrink-0">
             未設定
           </div>
-          <div class="flex-1">
-            <span class="font-bold block text-slate-300">サムネイル画像</span>
-            <span class="text-[10px] text-slate-400">右のプレビューから「📸 撮影」で即時セット！</span>
+          <div class="flex-1 flex flex-col justify-center">
+            <span class="font-bold block text-slate-300">タイトルサムネイル</span>
+            <span class="text-[10px] text-slate-400">「📸 撮影」または「🖼️ 画像選択」</span>
+            <div class="mt-1 flex gap-1">
+              <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-2 py-0.5 rounded border border-slate-700 font-bold transition">
+                🖼️ 画像選択
+                <input type="file" id="thumb-file-input" accept="image/*" class="hidden" onchange="handleThumbnailFile(event)">
+              </label>
+            </div>
           </div>
         </div>
 
@@ -88,7 +94,7 @@
         <div class="h-10 bg-[#2d2d2d] border-b border-[#333] flex justify-between items-center px-4 text-xs text-[#ccc]">
           <span class="font-bold">Preview</span>
           <div class="flex gap-2">
-            <!-- 📸 1秒サムネ撮影ボタン -->
+            <!-- 📸 サムネ撮影ボタン（画面全体を中央揃えで綺麗にキャプチャ） -->
             <button type="button" onclick="captureThumbnail()" class="bg-gradient-to-r from-amber-500 to-pink-500 hover:opacity-90 text-slate-950 font-black px-2.5 py-1 rounded text-xs shadow transition flex items-center gap-1">
               📸 この瞬間をサムネにする
             </button>
@@ -122,21 +128,89 @@
       terminal.scrollTop = terminal.scrollHeight;
     }
 
-    // 📸 1秒サムネキャプチャ処理（中央配置で綺麗に表示）
+    // 📸 手動での画像ファイル選択対応
+    window.handleThumbnailFile = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      capturedThumbnailBlob = file;
+      const url = URL.createObjectURL(file);
+      document.getElementById('thumb-preview').innerHTML = `<img src="${url}" class="w-full h-full object-cover object-center block" style="object-position: center center;">`;
+      log(`✅ サムネイル画像を設定しました: ${file.name}`);
+    };
+
+    // 📸 中央揃えサムネイルキャプチャ処理（右上寄りを完全防止！）
     window.captureThumbnail = async () => {
       if (!iframe.contentDocument && !iframe.contentWindow) return alert("ゲーム画面が読み込まれていません！");
-      log("📸 サムネイルをキャプチャ中...");
+      log("📸 サムネイルをキャプチャ中（中央配置・高精度処理）...");
 
       try {
         const doc = iframe.contentDocument || iframe.contentWindow.document;
-        const canvas = await html2canvas(doc.body, { width: 480, height: 270, useCORS: true });
-        
-        canvas.toBlob(blob => {
+        const win = iframe.contentWindow || window;
+
+        // 1. もし iframe 内に canvas があれば、canvas から直接キャプチャ（ゲーム画面が完全に綺麗に写る）
+        const canvasEls = doc.querySelectorAll('canvas');
+        let sourceCanvas = null;
+        if (canvasEls.length > 0) {
+          // 最も面積の大きい canvas を採用
+          let maxArea = 0;
+          canvasEls.forEach(c => {
+            const area = (c.width || c.clientWidth || 0) * (c.height || c.clientHeight || 0);
+            if (area > maxArea) {
+              maxArea = area;
+              sourceCanvas = c;
+            }
+          });
+        }
+
+        const targetW = 640;
+        const targetH = 360;
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = targetW;
+        outCanvas.height = targetH;
+        const ctx = outCanvas.getContext('2d');
+        ctx.fillStyle = '#0b0f19';
+        ctx.fillRect(0, 0, targetW, targetH);
+
+        if (sourceCanvas && sourceCanvas.width > 0 && sourceCanvas.height > 0) {
+          // canvas を 16:9 の中央にアスペクト比維持で描画
+          const sw = sourceCanvas.width;
+          const sh = sourceCanvas.height;
+          const scale = Math.max(targetW / sw, targetH / sh);
+          const dw = sw * scale;
+          const dh = sh * scale;
+          const dx = (targetW - dw) / 2;
+          const dy = (targetH - dh) / 2;
+
+          ctx.drawImage(sourceCanvas, dx, dy, dw, dh);
+        } else {
+          // 2. DOM要素全体のキャプチャ（画面全体の描画領域を測ってキャプチャ）
+          const rootEl = doc.body || doc.documentElement;
+          const renderedCanvas = await html2canvas(rootEl, {
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            windowWidth: doc.documentElement.clientWidth || win.innerWidth || 800,
+            windowHeight: doc.documentElement.clientHeight || win.innerHeight || 600
+          });
+
+          // 全体の中央に合わせて 16:9 に縮小描画
+          const sw = renderedCanvas.width;
+          const sh = renderedCanvas.height;
+          const scale = Math.max(targetW / sw, targetH / sh);
+          const dw = sw * scale;
+          const dh = sh * scale;
+          const dx = (targetW - dw) / 2;
+          const dy = (targetH - dh) / 2;
+
+          ctx.drawImage(renderedCanvas, dx, dy, dw, dh);
+        }
+
+        outCanvas.toBlob(blob => {
           capturedThumbnailBlob = blob;
           const url = URL.createObjectURL(blob);
           document.getElementById('thumb-preview').innerHTML = `<img src="${url}" class="w-full h-full object-cover object-center block" style="object-position: center center;">`;
-          log("✅ サムネイルの撮影が完了しました！");
-        }, 'image/jpeg', 0.85);
+          log("✅ サムネイルの中央撮影が完了しました！");
+        }, 'image/jpeg', 0.9);
       } catch (err) {
         log("❌ キャプチャ失敗: " + err.message);
       }
@@ -247,7 +321,6 @@
         ];
         let entryPath = entryCandidates.find(e => files[e] !== undefined);
 
-        // 候補リストにない場合でも、.tsx / .jsx を動的に探索
         if (!entryPath) {
           entryPath = Object.keys(files).find(p => p.endsWith('.tsx') || p.endsWith('.jsx'));
         }

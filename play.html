@@ -59,15 +59,19 @@
       <div class="lg:col-span-3 flex flex-col">
         <!-- タイトル表示エリア（サムネイル画像が右上に寄らないよう中央配置・統一） -->
         <div class="flex flex-wrap items-center gap-3 mb-2">
-          <div id="title-thumb-container" class="w-10 h-10 rounded-lg overflow-hidden bg-slate-800 border border-[#444] hidden shrink-0 flex items-center justify-center">
+          <div id="title-thumb-container" class="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 border border-[#444] hidden shrink-0 flex items-center justify-center relative">
             <img id="title-thumb-img" src="" alt="" class="w-full h-full object-cover object-center block" style="object-position: center center;">
           </div>
-          <h1 id="game-title" class="text-xl font-black text-slate-100">読み込み中...</h1>
-          <span id="price-badge" class="text-xs font-bold px-2 py-0.5 rounded"></span>
-          <span id="avg-rating-badge" class="text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded flex items-center gap-1">
-            ⭐ <span id="avg-rating-val">-</span> (<span id="rating-count-val">0</span>件)
-          </span>
-          <span id="game-author" class="text-xs text-slate-500 font-mono"></span>
+          <div class="flex-1 min-w-[200px]">
+            <div class="flex flex-wrap items-center gap-2">
+              <h1 id="game-title" class="text-xl font-black text-slate-100">読み込み中...</h1>
+              <span id="price-badge" class="text-xs font-bold px-2 py-0.5 rounded"></span>
+              <span id="avg-rating-badge" class="text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded flex items-center gap-1">
+                ⭐ <span id="avg-rating-val">-</span> (<span id="rating-count-val">0</span>件)
+              </span>
+            </div>
+            <p id="game-author" class="text-[11px] text-slate-400 font-mono mt-0.5"></p>
+          </div>
         </div>
 
         <!-- プレビュー/プレイ枠 -->
@@ -213,26 +217,22 @@
 
     // 📱 iPhone / 非対応環境検知 & 擬似全画面（Pseudo-fullscreen）トグル
     function isFullscreenSupported() {
-      // iOS / iPhone / iPad の Safari は div の requestFullscreen をサポートしない
       const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
       return !isIOS && (Boolean(mainArea.requestFullscreen) || Boolean(mainArea.webkitRequestFullscreen));
     }
 
     function toggleFullscreen() {
-      // 擬似全画面モードのトグル
       if (isPseudoFullscreen) {
         exitPseudoFullscreen();
         return;
       }
 
-      // 標準のフルスクリーンが使える場合
       if (isFullscreenSupported() && (document.fullscreenElement || document.webkitFullscreenElement)) {
         if (document.exitFullscreen) document.exitFullscreen();
         else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
         return;
       }
 
-      // 標準フルスクリーンの試行
       if (isFullscreenSupported()) {
         try {
           const req = mainArea.requestFullscreen || mainArea.webkitRequestFullscreen;
@@ -244,7 +244,6 @@
           enterPseudoFullscreen();
         }
       } else {
-        // iPhone または未対応ブラウザは即座に擬似全画面モード！
         enterPseudoFullscreen();
       }
     }
@@ -267,30 +266,19 @@
 
     fullscreenBtn.addEventListener('click', toggleFullscreen);
 
-    // 通常のfullscreenchangeイベント監視
     document.addEventListener('fullscreenchange', () => {
-      if (!document.fullscreenElement) {
-        fullscreenBtn.innerHTML = '<span>⛶</span> 全画面表示';
-      } else {
-        fullscreenBtn.innerHTML = '<span>✕</span> 全画面解除';
-      }
+      if (!document.fullscreenElement) fullscreenBtn.innerHTML = '<span>⛶</span> 全画面表示';
+      else fullscreenBtn.innerHTML = '<span>✕</span> 全画面解除';
     });
     document.addEventListener('webkitfullscreenchange', () => {
-      if (!document.webkitFullscreenElement) {
-        fullscreenBtn.innerHTML = '<span>⛶</span> 全画面表示';
-      } else {
-        fullscreenBtn.innerHTML = '<span>✕</span> 全画面解除';
-      }
+      if (!document.webkitFullscreenElement) fullscreenBtn.innerHTML = '<span>⛶</span> 全画面表示';
+      else fullscreenBtn.innerHTML = '<span>✕</span> 全画面解除';
     });
 
-    // ESCキーで擬似全画面を解除
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && isPseudoFullscreen) {
-        exitPseudoFullscreen();
-      }
+      if (e.key === 'Escape' && isPseudoFullscreen) exitPseudoFullscreen();
     });
 
-    // セーブデータ消去処理
     clearDataBtn.addEventListener('click', () => {
       if (!iframe.srcdoc) return alert("ゲームが読み込まれていません。");
       if (confirm("セーブデータ（localStorage）を削除して再読み込みしますか？")) {
@@ -312,14 +300,12 @@
       }
     });
 
-    // プレビュー内エラー検知
     window.addEventListener('message', (e) => {
       if (e.data && e.data.type === 'error') {
         log(`❌ [ゲーム内エラー] ${e.data.msg}`);
       }
     });
 
-    // ★ esbuild-wasm 初期化 ★
     async function initEsbuild() {
       try {
         await esbuild.initialize({
@@ -334,7 +320,6 @@
       }
     }
 
-    // ゲーム情報取得 ＆ 実行
     async function loadAndRunGame() {
       if (!gameId) return;
       const { data: game, error } = await supabase.from('games').select('*').eq('id', gameId).single();
@@ -346,7 +331,7 @@
       document.getElementById('game-desc').innerText = game.description || '説明はありません。';
       document.getElementById('like-count').innerText = game.likes_count || 0;
 
-      // タイトルサムネイル（中央揃え・右上寄りを防止）
+      // タイトルサムネイル（中央揃え・右上寄りを完全防止）
       if (game.thumbnail_url) {
         const thumbCont = document.getElementById('title-thumb-container');
         const thumbImg = document.getElementById('title-thumb-img');
@@ -363,7 +348,6 @@
         priceBadge.innerText = 'FREE';
       }
 
-      // ユーザー確認
       const { data: { user } } = await supabase.auth.getUser();
       currentUser = user;
       if (user) {
@@ -373,7 +357,6 @@
         document.getElementById('review-user-name').value = prof?.username || user.email.split('@')[0];
       }
 
-      // 有料ロックチェック
       if (game.price_coins > 0) {
         let isPurchased = false;
         if (user) {
@@ -390,7 +373,7 @@
         }
       }
 
-      // ★ ゲームデータの取得（HTMLまたはZip） ★
+      // ★★★ ゲームデータの取得（404・非Zip判定ガードを強化し、「Can't find end of central directory」を撲滅！） ★★★
       log(`📦 ゲームデータを取得中: ${game.title}`);
       let targetUrl = game.entry_url;
       if (targetUrl && targetUrl.includes('supabase.co')) {
@@ -399,18 +382,34 @@
 
       try {
         const response = await fetch(targetUrl);
-        const textData = await response.text();
+        if (!response.ok) {
+          throw new Error(`ゲームファイルの取得に失敗しました (Status: ${response.status} ${response.statusText})`);
+        }
 
-        // もしHTMLファイルなら直接実行、Zipファイルバイナリならエンジンで解凍・バンドル
-        if (textData.includes('<!DOCTYPE html>') || textData.includes('<html')) {
-          log("⚡ 単一HTMLゲームを検出。展開して実行します...");
-          iframe.srcdoc = textData;
-          log("🚀 ゲーム起動完了！");
+        const arrayBuffer = await response.arrayBuffer();
+        const uint8 = new Uint8Array(arrayBuffer);
+
+        // Zipマジックバイト検査 (先頭が 'PK\x03\x04' または 'PK')
+        const isZip = uint8.length >= 4 && uint8[0] === 0x50 && uint8[1] === 0x4B;
+
+        if (isZip) {
+          log("⚡ Zipファイルを検出。esbuild エンジンで展開・バンドルします...");
+          await processZipArrayBuffer(arrayBuffer);
         } else {
-          // Zipバイナリの展開処理
-          const blobRes = await fetch(targetUrl);
-          const blob = await blobRes.blob();
-          await processZipBlob(blob);
+          // テキストとしてデコード
+          const textData = new TextDecoder('utf-8').decode(uint8);
+          if (textData.includes('<!DOCTYPE html>') || textData.includes('<html') || textData.includes('<head>') || textData.includes('<body>') || textData.includes('<script')) {
+            log("⚡ 単一HTMLゲームを検出。展開して実行します...");
+            iframe.srcdoc = textData;
+            log("🚀 ゲーム起動完了！");
+          } else {
+            // もしエラーJSONや不正なデータだった場合
+            log(`⚠️ 取得されたデータがHTML/Zipではありません。\n内容: ${textData.slice(0, 150)}`);
+            iframe.srcdoc = `<body style="background:#0b0f19;color:#ff6b6b;font-family:sans-serif;padding:24px;text-align:center;">
+              <h3>⚠️ ゲームファイルの読み込みに失敗しました</h3>
+              <p style="color:#aaa;font-size:12px;">アップロードされたファイルが有効なHTMLまたはZipファイルか確認してください。</p>
+            </body>`;
+          }
         }
       } catch (err) {
         log(`❌ ゲーム読み込み失敗: ${err.message}`);
@@ -422,11 +421,11 @@
       loadReviews();
     }
 
-    // ★★★ Zipの展開・バンドル（index.html自動補完付き） ★★★
-    async function processZipBlob(blobFile) {
+    // ★★★ Zipの展開・バンドル（index.html自動補完付き & ArrayBuffer直接処理） ★★★
+    async function processZipArrayBuffer(arrayBuffer) {
       log(`⚡ esbuild でZipを展開・バンドル中...`);
       try {
-        const zip = await JSZip.loadAsync(blobFile);
+        const zip = await JSZip.loadAsync(arrayBuffer);
         const files = {};
         const paths = Object.keys(zip.files);
 
@@ -592,7 +591,7 @@
       }
     }
 
-    // 💰 購入処理（作者の手元にコインが入るよう改善！）
+    // 💰 購入処理（作者の手元にコインが入る！）
     window.buyGame = async () => {
       if (!currentUser) return window.location.href = 'index.html';
       if (userCoins < currentGame.price_coins) return alert(`コイン不足！(所持: ${userCoins} G)`);
@@ -600,12 +599,10 @@
 
       const price = currentGame.price_coins;
 
-      // 1. 購入者のコインを減額
       await supabase.from('profiles').update({ coins: userCoins - price }).eq('email', currentUser.email);
       await supabase.from('purchases').insert({ user_email: currentUser.email, game_id: gameId });
       userCoins -= price;
 
-      // 2. 作者の手元にコインを付与！
       if (currentGame.author_email) {
         try {
           const { data: authorProf } = await supabase.from('profiles').select('coins').eq('email', currentGame.author_email).single();
@@ -621,17 +618,15 @@
       loadAndRunGame();
     };
 
-    // 🪙 投げ銭処理（作者の手元にコインが入るよう改善！）
+    // 🪙 投げ銭処理（作者の手元にコインが入る！）
     window.sendTip = async (amount = 30) => {
       if (!currentUser) return alert('ログインが必要です！');
       if (userCoins < amount) return alert('コインが足りません！');
       if (!confirm(`作者に ${amount} G 投げ銭しますか？`)) return;
 
-      // 1. 送信者のコインを減額
       await supabase.from('profiles').update({ coins: userCoins - amount }).eq('email', currentUser.email);
       userCoins -= amount;
 
-      // 2. 作者の手元にコインを加算！
       if (currentGame.author_email) {
         try {
           const { data: authorProf } = await supabase.from('profiles').select('coins').eq('email', currentGame.author_email).single();
@@ -642,7 +637,6 @@
         }
       }
 
-      // 3. チャット通知
       await supabase.from('messages').insert({
         game_id: gameId,
         user_name: '🪙 SYSTEM::gold',
@@ -741,30 +735,28 @@
 
     async function loadReviews() {
       let reviews = [];
-      // 1. Supabaseから取得試行
+      // 1. サーバーAPIから取得（超高速）
       try {
-        const { data, error } = await supabase.from('reviews').select('*').eq('game_id', gameId).order('created_at', { ascending: false });
-        if (!error && data) reviews = data;
-      } catch (err) {
-        console.warn('Supabase reviews table not available:', err);
-      }
+        const res = await fetch(`/api/reviews?game_id=${gameId}`);
+        if (res.ok) {
+          const apiData = await res.json();
+          if (apiData && apiData.length > 0) reviews = apiData;
+        }
+      } catch (e) {}
 
-      // 2. サーバーAPIフォールバック
+      // 2. Supabaseから取得試行
       if (reviews.length === 0) {
         try {
-          const res = await fetch(`/api/reviews?game_id=${gameId}`);
-          if (res.ok) {
-            const apiData = await res.json();
-            if (apiData && apiData.length > 0) reviews = apiData;
-          }
-        } catch (e) {}
+          const { data, error } = await supabase.from('reviews').select('*').eq('game_id', gameId).order('created_at', { ascending: false });
+          if (!error && data && data.length > 0) reviews = data;
+        } catch (err) {}
       }
 
       // 3. localStorageフォールバック
       if (reviews.length === 0) {
         try {
           const local = JSON.parse(localStorage.getItem(`ghub_rev_${gameId}`) || '[]');
-          reviews = local;
+          if (local.length > 0) reviews = local;
         } catch (e) {}
       }
 
@@ -839,24 +831,21 @@
         created_at: new Date().toISOString()
       };
 
-      // 1. Supabaseへ挿入試行
-      let saved = false;
+      // 1. サーバーAPI保存（超高速・確実）
       try {
-        const { error } = await supabase.from('reviews').insert(reviewPayload);
-        if (!error) saved = true;
-      } catch (err) {}
-
-      // 2. サーバーAPI保存
-      try {
-        const res = await fetch('/api/reviews', {
+        await fetch('/api/reviews', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(reviewPayload)
         });
-        if (res.ok) saved = true;
       } catch (err) {}
 
-      // 3. localStorageにも二重保存（オフライン・テーブル不在時も確実に永続化）
+      // 2. Supabaseへ挿入試行
+      try {
+        await supabase.from('reviews').insert(reviewPayload);
+      } catch (err) {}
+
+      // 3. localStorageにも二重保存
       try {
         const local = JSON.parse(localStorage.getItem(`ghub_rev_${gameId}`) || '[]');
         local.unshift(reviewPayload);

@@ -5,6 +5,17 @@
   <title>プロフィール - G-HUB</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
+  <style>
+    .game-thumb-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover !important;
+      object-position: 50% 50% !important;
+      display: block;
+    }
+  </style>
 </head>
 <body class="bg-[#0b0f19] text-white min-h-screen p-6 font-sans">
   <div class="max-w-5xl mx-auto space-y-6">
@@ -127,7 +138,7 @@
           <div>
             <div class="aspect-video bg-slate-950 rounded-xl mb-3 overflow-hidden flex items-center justify-center w-full relative">
               ${g.thumbnail_url 
-                ? `<img src="${g.thumbnail_url}" alt="${g.title}" class="w-full h-full object-cover object-center block" style="object-position: center center;">` 
+                ? `<img src="${g.thumbnail_url}" alt="${g.title}" loading="lazy" class="game-thumb-img">` 
                 : '<span class="text-3xl">🕹️</span>'}
             </div>
             <h4 class="font-bold text-sm text-slate-100">${g.title}</h4>

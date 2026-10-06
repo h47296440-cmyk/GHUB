@@ -33,6 +33,21 @@ interface ReviewItem {
 
 const reviewsStore = new Map<string, ReviewItem[]>();
 
+// 全ゲームの平均星評価サマリー（高速レスポンスでホーム画面を爆速化）
+app.get('/api/reviews/summary', (_req: Request, res: Response) => {
+  const summary: Record<string, { avg: string; count: number }> = {};
+  for (const [gid, list] of reviewsStore.entries()) {
+    if (list && list.length > 0) {
+      const sum = list.reduce((acc, cur) => acc + (Number(cur.rating) || 5), 0);
+      summary[gid] = {
+        avg: (sum / list.length).toFixed(1),
+        count: list.length
+      };
+    }
+  }
+  res.json(summary);
+});
+
 app.get('/api/reviews', (req: Request, res: Response) => {
   const game_id = req.query.game_id as string;
   if (!game_id) return res.json([]);

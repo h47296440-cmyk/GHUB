@@ -12,6 +12,19 @@
     }
   </script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
+  <style>
+    /* タイトル画像・サムネイルの中央固定スタイル */
+    .game-thumb-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover !important;
+      object-position: 50% 50% !important;
+      display: block;
+      transform-origin: center center !important;
+    }
+  </style>
 </head>
 <body class="bg-slate-100/70 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen font-sans transition-colors duration-200">
 
@@ -219,7 +232,7 @@
     window.client = client;
 
     let allGames = [];
-    let gameReviewsMap = {}; // ゲームごとの平均星評価キャッシュ
+    let gameReviewsMap = {}; // ゲームごとの平均星評価キャッシュ { [game_id]: "4.8" }
     let currentTag = 'All';
     let currentPlat = null;
     let onlyEvent = false;
@@ -250,18 +263,66 @@
     };
     initTheme();
 
-    // --- ゲーム一覧 & レビュー読み込み ---
+    // --- 高速・ノンブロッキング ゲーム読み込み ---
     async function loadGames() {
-      const { data } = await client.from('games').select('*').order(currentSort, { ascending: false });
-      allGames = data || [];
-      await loadReviewsSummary();
-      renderGames();
+      try {
+        // 先にローカルストレージとサーバーキャッシュから星評価をクイック復元
+        loadLocalReviewCache();
+
+        const { data, error } = await client.from('games').select('*').order(currentSort, { ascending: false });
+        allGames = data || [];
+
+        // ⚡ レビュー待ちを待たずに即座にレンダリング！（これでホーム画面の重さが完全に消える）
+        renderGames();
+
+        // バックグラウンドで非同期に最新レビューサマリーを取得してバッジ更新
+        fetchReviewsSummaryAsync();
+      } catch (err) {
+        console.error('Failed to load games:', err);
+        renderGames();
+      }
     }
 
-    async function loadReviewsSummary() {
-      // Supabase または サーバー/ローカルから各ゲームのレビュー概要を取得
+    function loadLocalReviewCache() {
       try {
-        const { data: revs } = await client.from('reviews').select('game_id, rating');
+        // 過去のlocalStorageから各ゲームの評価を反映
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('ghub_rev_')) {
+            const gid = key.replace('ghub_rev_', '');
+            const loc = JSON.parse(localStorage.getItem(key) || '[]');
+            if (loc && loc.length > 0) {
+              const sum = loc.reduce((acc, cur) => acc + (Number(cur.rating) || 5), 0);
+              gameReviewsMap[gid] = (sum / loc.length).toFixed(1);
+            }
+          }
+        }
+      } catch (e) {}
+    }
+
+    async function fetchReviewsSummaryAsync() {
+      // 1. サーバーの超高速サマリーAPIを叩く
+      try {
+        const res = await fetch('/api/reviews/summary');
+        if (res.ok) {
+          const summary = await res.json();
+          let updated = false;
+          Object.keys(summary).forEach(gid => {
+            if (summary[gid]?.avg) {
+              gameReviewsMap[gid] = summary[gid].avg;
+              updated = true;
+            }
+          });
+          if (updated) updateStarBadgesInDOM();
+        }
+      } catch (e) {}
+
+      // 2. Supabase の reviews テーブルからも取得（短時間タイムアウトで試行）
+      try {
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject('timeout'), 1500));
+        const queryPromise = client.from('reviews').select('game_id, rating');
+        const { data: revs } = await Promise.race([queryPromise, timeoutPromise]);
+
         if (revs && revs.length > 0) {
           const stats = {};
           revs.forEach(r => {
@@ -272,19 +333,26 @@
           Object.keys(stats).forEach(gid => {
             gameReviewsMap[gid] = (stats[gid].total / stats[gid].count).toFixed(1);
           });
+          updateStarBadgesInDOM();
         }
-      } catch (e) {
-        // フォールバック（localStorage）
-        allGames.forEach(g => {
-          try {
-            const loc = JSON.parse(localStorage.getItem(`ghub_rev_${g.id}`) || '[]');
-            if (loc.length > 0) {
-              const sum = loc.reduce((acc, cur) => acc + (Number(cur.rating) || 5), 0);
-              gameReviewsMap[g.id] = (sum / loc.length).toFixed(1);
-            }
-          } catch (err) {}
-        });
-      }
+      } catch (e) {}
+    }
+
+    function updateStarBadgesInDOM() {
+      allGames.forEach(g => {
+        const star = gameReviewsMap[g.id];
+        if (star) {
+          const badgeEl = document.getElementById(`star-badge-${g.id}`);
+          if (badgeEl) {
+            badgeEl.innerHTML = `⭐ ${star}`;
+            badgeEl.classList.remove('hidden');
+          }
+          const cardStarEl = document.getElementById(`card-star-${g.id}`);
+          if (cardStarEl) {
+            cardStarEl.innerHTML = `⭐ ${star}`;
+          }
+        }
+      });
     }
 
     window.setTag = (tag) => {
@@ -321,8 +389,8 @@
     window.filterGames = () => renderGames();
 
     function renderGames() {
-      const q = document.getElementById('search-input').value.toLowerCase();
-      let filtered = allGames.filter(g => g.title.toLowerCase().includes(q));
+      const q = (document.getElementById('search-input')?.value || '').toLowerCase();
+      let filtered = allGames.filter(g => (g.title || '').toLowerCase().includes(q));
 
       if (onlyEvent) filtered = filtered.filter(g => g.is_event);
       if (currentPlat) filtered = filtered.filter(g => (g.platforms || '').includes(currentPlat));
@@ -337,16 +405,17 @@
       list.innerHTML = filtered.map(g => {
         const plats = (g.platforms || 'pc').split(',').map(p => p === 'mobile' ? 'Mobile' : p === 'pad' ? 'Gamepad' : 'PC').join(' · ');
         const avgStar = gameReviewsMap[g.id] || null;
+        const starDisplayText = avgStar ? `⭐ ${avgStar}` : '⭐ NEW';
 
         return `
           <a href="play.html?id=${g.id}" class="group bg-white dark:bg-[#111827] border border-slate-200/80 dark:border-slate-800 rounded-2xl overflow-hidden hover:border-indigo-500 hover:-translate-y-1 transition duration-200 block shadow-sm dark:shadow-lg relative">
-            ${g.is_event ? '<span class="absolute top-2 right-2 z-10 bg-indigo-600 text-white font-bold text-[9px] px-2 py-0.5 rounded shadow-sm">EVENT</span>' : ''}
+            ${g.is_event ? '<span class="absolute top-2 right-2 z-20 bg-indigo-600 text-white font-bold text-[9px] px-2 py-0.5 rounded shadow-sm">EVENT</span>' : ''}
             
-            <!-- サムネイル枠：右上に寄らないよう object-center & center center 完全固定 -->
-            <div class="aspect-video relative overflow-hidden bg-slate-100 dark:bg-slate-950 flex items-center justify-center w-full">
+            <!-- サムネイル枠：右上寄りを完全防止する position:relative & absolute inset-0 センタリング構造 -->
+            <div class="relative w-full aspect-video overflow-hidden bg-slate-100 dark:bg-slate-950 flex items-center justify-center">
               ${g.thumbnail_url 
-                ? `<img src="${g.thumbnail_url}" alt="${g.title}" class="w-full h-full object-cover object-center block group-hover:scale-105 transition duration-300" style="object-position: center center;">`
-                : `<div class="text-slate-300 dark:text-slate-700 font-mono text-xs uppercase tracking-widest font-bold">No Image</div>`
+                ? `<img src="${g.thumbnail_url}" alt="${g.title}" loading="lazy" decoding="async" class="game-thumb-img group-hover:scale-105 transition duration-300">`
+                : `<div class="text-slate-300 dark:text-slate-700 font-mono text-xs uppercase tracking-widest font-bold z-0">No Image</div>`
               }
               
               <!-- バッジ類 -->
@@ -359,23 +428,22 @@
                 </span>
               </div>
 
-              <span class="absolute bottom-2 left-2 bg-slate-900/60 dark:bg-black/60 text-slate-200 text-[9px] px-1.5 py-0.5 rounded backdrop-blur-sm font-mono">
+              <span class="absolute bottom-2 left-2 bg-slate-900/60 dark:bg-black/60 text-slate-200 text-[9px] px-1.5 py-0.5 rounded backdrop-blur-sm font-mono z-10">
                 ${g.tag || 'Game'}
               </span>
 
-              ${avgStar ? `
-                <span class="absolute bottom-2 right-2 bg-slate-900/70 dark:bg-black/70 text-amber-400 text-[10px] px-2 py-0.5 rounded backdrop-blur-sm font-mono font-bold flex items-center gap-0.5">
-                  ⭐ ${avgStar}
-                </span>
-              ` : ''}
+              <!-- 星評価バッジ（右下に常にピカピカと表示） -->
+              <span id="star-badge-${g.id}" class="absolute bottom-2 right-2 bg-slate-900/80 dark:bg-black/80 text-amber-400 text-[10px] px-2 py-0.5 rounded backdrop-blur-sm font-mono font-bold flex items-center gap-0.5 z-10">
+                ${starDisplayText}
+              </span>
             </div>
 
             <div class="p-4">
               <h2 class="font-bold text-sm text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition truncate">${g.title}</h2>
               <p class="text-slate-500 dark:text-slate-400 text-xs mt-1 line-clamp-2 leading-relaxed">${g.description || '説明はありません。'}</p>
-              <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between text-[11px] text-slate-400 font-mono">
+              <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[11px] text-slate-400 font-mono">
                 <span>❤️ Likes: ${g.likes_count || 0}</span>
-                <span>⭐ ${avgStar ? avgStar : '-'}</span>
+                <span id="card-star-${g.id}" class="text-amber-500 font-bold">${starDisplayText}</span>
                 <span>🎮 Plays: ${g.play_count || 0}</span>
               </div>
             </div>

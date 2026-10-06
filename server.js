@@ -2,7 +2,6 @@ import express from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,8 +20,23 @@ app.use('/supabase', createProxyMiddleware({
 // 2. JSONパーサー
 app.use(express.json({ limit: '10mb' }));
 
-// レビュー保存用メモリ/ファイルキャッシュ（Supabase側の補助・フォールバック対応）
+// レビュー保存用インメモリキャッシュ
 const reviewsStore = new Map();
+
+// 全ゲームの平均星評価サマリー（高速レスポンスでホーム画面を爆速化）
+app.get('/api/reviews/summary', (_req, res) => {
+  const summary = {};
+  for (const [gid, list] of reviewsStore.entries()) {
+    if (list && list.length > 0) {
+      const sum = list.reduce((acc, cur) => acc + (Number(cur.rating) || 5), 0);
+      summary[gid] = {
+        avg: (sum / list.length).toFixed(1),
+        count: list.length
+      };
+    }
+  }
+  res.json(summary);
+});
 
 app.get('/api/reviews', (req, res) => {
   const { game_id } = req.query;
@@ -90,7 +104,7 @@ app.post('/ai', async (req, res) => {
     console.log('Hugging Face待機タイムアウト。即座にバックアップQwenへ切り替えます...');
   }
 
-  // --- ルートB: 高速バックアップQwenサーバー（寝ない・0秒起動） ---
+  // --- ルートB: 高速バックアップQwenサーバー ---
   try {
     console.log('⚡ バックアップQwenエンジンで即時生成中...');
     const backupRes = await fetch('https://text.pollinations.ai/', {
