@@ -94,6 +94,23 @@
             </div>
           </div>
           <div>
+            <label class="block font-bold mb-1 text-slate-300 flex justify-between">
+              <span>⏳ 体験版（制限時間）設定</span>
+              <span class="text-[10px] text-amber-400 font-normal">時間経過で強制終了</span>
+            </label>
+            <div class="flex gap-2">
+              <select id="game-trial-select" class="flex-1 bg-[#2d2d2d] border border-[#444] p-2 rounded outline-none text-white" onchange="toggleCustomTrial(this)">
+                <option value="0">制限なし (無制限)</option>
+                <option value="5">5分間 体験版</option>
+                <option value="10">10分間 体験版</option>
+                <option value="15">15分間 体験版</option>
+                <option value="30">30分間 体験版</option>
+                <option value="custom">指定 (分)</option>
+              </select>
+              <input type="number" id="game-trial-custom" placeholder="分" min="1" max="180" class="w-20 bg-[#2d2d2d] border border-[#444] p-2 rounded outline-none text-white hidden">
+            </div>
+          </div>
+          <div>
             <label class="block font-bold mb-1 text-slate-300">説明文</label>
             <textarea id="game-desc" rows="2" placeholder="ゲームの説明や操作方法" class="w-full bg-[#2d2d2d] border border-[#444] p-2 rounded outline-none text-white"></textarea>
           </div>
@@ -513,11 +530,28 @@
       }
     }
 
+    window.toggleCustomTrial = (select) => {
+      const customInput = document.getElementById('game-trial-custom');
+      if (select.value === 'custom') {
+        customInput.classList.remove('hidden');
+        customInput.focus();
+      } else {
+        customInput.classList.add('hidden');
+      }
+    };
+
     async function publishToGHub() {
       const title = document.getElementById('game-title').value;
       const tag = document.getElementById('game-tag').value;
       const price = parseInt(document.getElementById('game-price').value);
       const desc = document.getElementById('game-desc').value;
+      const trialSelect = document.getElementById('game-trial-select').value;
+      let trialMinutes = 0;
+      if (trialSelect === 'custom') {
+        trialMinutes = parseInt(document.getElementById('game-trial-custom').value) || 0;
+      } else {
+        trialMinutes = parseInt(trialSelect) || 0;
+      }
       const btn = document.getElementById('publish-btn');
 
       if (!title) return alert('タイトルを入力してください！');
@@ -557,6 +591,7 @@
           author_email: user.email,
           platforms: 'pc',
           price_coins: price,
+          trial_duration_minutes: trialMinutes,
           likes_count: 0,
           play_count: 0
         });

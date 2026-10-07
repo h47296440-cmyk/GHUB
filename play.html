@@ -62,6 +62,9 @@
       </div>
 
       <div class="flex items-center gap-2">
+        <button onclick="openFriendModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow">
+          👥 Friends
+        </button>
         <button onclick="sendTip(30)" id="tip-btn" class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:opacity-90 px-3 py-1.5 rounded-xl font-bold text-xs text-slate-950 flex items-center gap-1 shadow">
           🪙 30 G 投げ銭！
         </button>
@@ -85,6 +88,9 @@
             <div class="flex flex-wrap items-center gap-2">
               <h1 id="game-title" class="text-xl font-black text-slate-100">読み込み中...</h1>
               <span id="price-badge" class="text-xs font-bold px-2 py-0.5 rounded"></span>
+              <span id="trial-badge" class="hidden text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded">
+                ⏳ 体験版
+              </span>
               <span id="avg-rating-badge" class="text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded flex items-center gap-1">
                 ⭐ <span id="avg-rating-val">-</span> (<span id="rating-count-val">0</span>件)
               </span>
@@ -96,10 +102,16 @@
         <!-- プレビュー/プレイ枠 -->
         <div id="main-player" class="bg-[#1e1e1e] rounded-xl border border-[#333] flex flex-col aspect-video shadow-2xl relative overflow-hidden transition-all duration-200">
           <div class="h-10 bg-[#2d2d2d] border-b border-[#333] flex items-center justify-between px-4 text-xs text-[#ccc]">
-            <span id="engine-status" class="font-bold flex items-center gap-2 truncate">
-              <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> Wasmエンジン起動中...
-            </span>
-            <div class="flex gap-2">
+            <div class="flex items-center gap-3 overflow-hidden">
+              <span id="engine-status" class="font-bold flex items-center gap-2 truncate">
+                <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span> Wasmエンジン起動中...
+              </span>
+              <!-- ⏳ 体験版タイマーバッジ -->
+              <span id="trial-timer-badge" class="hidden bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-mono px-2 py-0.5 rounded font-bold whitespace-nowrap">
+                ⏳ 体験版 残り --:--
+              </span>
+            </div>
+            <div class="flex gap-2 shrink-0">
               <button id="clear-data-btn" class="bg-[#dc2626] hover:bg-[#ef4444] text-white px-3 py-1 rounded font-bold text-xs transition">🗑️ セーブデータ消去</button>
               <button id="fullscreen-btn" class="bg-[#4f46e5] hover:bg-[#6366f1] text-white px-3 py-1 rounded font-bold text-xs transition flex items-center gap-1">
                 <span>⛶</span> 全画面表示
@@ -117,6 +129,18 @@
             <button onclick="buyGame()" class="bg-gradient-to-r from-amber-500 to-pink-500 hover:opacity-90 text-slate-950 font-black px-6 py-3 rounded-xl text-sm shadow-xl transition">
               💎 <span id="buy-price">100</span> G で購入して遊ぶ！
             </button>
+          </div>
+
+          <!-- ⏳ 体験版時間切れオーバーレイ -->
+          <div id="trial-expired-overlay" class="hidden absolute inset-0 bg-[#0b0f19]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-30">
+            <span class="text-5xl mb-3">⏳</span>
+            <h2 class="text-xl font-black text-amber-400 mb-1">体験版の制限時間が終了しました</h2>
+            <p id="trial-expired-desc" class="text-xs text-slate-300 max-w-sm mb-4 leading-relaxed">
+              指定された体験版プレイ時間（<span id="trial-expired-limit">10</span>分）が経過したため、ゲームを一時停止しました。
+            </p>
+            <div id="trial-action-buttons" class="flex flex-col gap-2 w-full max-w-xs">
+              <!-- JSで動的にボタン生成 -->
+            </div>
           </div>
         </div>
 
@@ -265,6 +289,25 @@
           <textarea id="edit-game-desc" rows="3" class="w-full bg-[#1e1e1e] border border-[#444] p-2.5 rounded-lg text-white outline-none focus:border-indigo-500"></textarea>
         </div>
 
+        <!-- ⏳ 体験版（制限時間）設定 -->
+        <div>
+          <label class="block font-bold mb-1 text-slate-300 flex justify-between">
+            <span>⏳ 体験版（制限時間）設定</span>
+            <span class="text-[10px] text-amber-400 font-normal">時間経過で強制終了</span>
+          </label>
+          <div class="flex gap-2">
+            <select id="edit-trial-select" class="flex-1 bg-[#1e1e1e] border border-[#444] p-2.5 rounded-lg outline-none text-white" onchange="toggleEditCustomTrial(this)">
+              <option value="0">制限なし (無制限)</option>
+              <option value="5">5分間 体験版</option>
+              <option value="10">10分間 体験版</option>
+              <option value="15">15分間 体験版</option>
+              <option value="30">30分間 体験版</option>
+              <option value="custom">指定 (分)</option>
+            </select>
+            <input type="number" id="edit-trial-custom" placeholder="分" min="1" max="180" class="w-20 bg-[#1e1e1e] border border-[#444] p-2.5 rounded-lg outline-none text-white hidden">
+          </div>
+        </div>
+
         <!-- タイトル画像（サムネイル）変更 -->
         <div class="bg-[#1e1e1e] p-3 rounded-xl border border-[#333] space-y-2">
           <label class="block font-bold text-slate-300">タイトル画像（サムネイル）</label>
@@ -316,6 +359,40 @@
     </div>
   </div>
 
+  <!-- 👥 強化フレンドモーダル -->
+  <div id="friend-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-[#252526] border border-[#444] p-6 rounded-3xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl text-xs space-y-4">
+      <div class="flex justify-between items-center border-b border-[#333] pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">👥</span>
+          <h2 class="text-base font-black text-white">フレンド & オンラインステータス</h2>
+        </div>
+        <button onclick="closeFriendModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+      </div>
+
+      <!-- フレンド追加フォーム -->
+      <form id="friend-add-form" class="flex gap-2 bg-[#1e1e1e] p-2.5 rounded-xl border border-[#333]" onsubmit="handleAddFriend(event)">
+        <input type="email" id="friend-add-input" placeholder="フレンドのメールアドレスを入力" required class="flex-1 bg-[#2d2d2d] border border-[#444] px-3 py-1.5 rounded-lg text-white text-xs outline-none focus:border-indigo-500">
+        <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3.5 py-1.5 rounded-lg whitespace-nowrap shadow transition">
+          ＋ 追加
+        </button>
+      </form>
+
+      <!-- フレンド一覧リスト -->
+      <div class="flex-1 overflow-y-auto space-y-3 pr-1" id="friends-list-container">
+        <div class="text-center py-8 text-slate-500">フレンドの状況を読み込み中...</div>
+      </div>
+
+      <div class="pt-2 border-t border-[#333] flex justify-between items-center text-[11px] text-slate-400">
+        <span class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          リアルタイム更新中 (12秒毎)
+        </span>
+        <button onclick="loadFriendsStatus()" class="text-indigo-400 hover:underline">🔄 今すぐ更新</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const proxyUrl = window.location.origin + '/supabase';
     const supabase = window.supabase.createClient(proxyUrl, 'sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj');
@@ -338,6 +415,8 @@
     let newThumbnailBlob = null;
     let newGameFilePayload = null;
     let newPayloadType = 'html';
+    let trialTimerInterval = null;
+    let playSessionStart = Date.now();
 
     function log(msg) {
       terminal.innerText += msg + '\n';
@@ -516,21 +595,65 @@
         document.getElementById('review-user-name').value = prof?.username || user.email.split('@')[0];
       }
 
-      if (game.price_coins > 0) {
-        let isPurchased = false;
-        if (user) {
-          if (user.email === game.author_email) isPurchased = true;
-          else {
-            const { data: purchase } = await supabase.from('purchases').select('*').eq('user_email', user.email).eq('game_id', gameId).single();
-            if (purchase) isPurchased = true;
-          }
-        }
-        if (!isPurchased) {
-          document.getElementById('lock-overlay').classList.remove('hidden');
-          document.getElementById('buy-price').innerText = game.price_coins;
-          return;
+      const trialMin = Number(game.trial_duration_minutes) || 0;
+      let isPurchased = false;
+      if (user) {
+        if (user.email === game.author_email) isPurchased = true;
+        else if (game.price_coins > 0) {
+          const { data: purchase } = await supabase.from('purchases').select('*').eq('user_email', user.email).eq('game_id', gameId).single();
+          if (purchase) isPurchased = true;
         }
       }
+
+      // 有料ゲームで、未購入かつ体験版未設定の場合は即ロック
+      if (game.price_coins > 0 && !isPurchased && trialMin <= 0) {
+        document.getElementById('lock-overlay').classList.remove('hidden');
+        document.getElementById('buy-price').innerText = game.price_coins;
+        return;
+      }
+
+      // ⏳ 体験版（合計制限時間）のチェック ＆ リアルタイム強制終了タイマー起動
+      if (trialMin > 0 && !isPurchased) {
+        const trialBadge = document.getElementById('trial-badge');
+        trialBadge.classList.remove('hidden');
+        trialBadge.innerText = `⏳ 体験版 (${trialMin}分)`;
+
+        const trialStorageKey = `ghub_trial_${gameId}_${user?.email || 'guest'}`;
+        let playedSec = parseInt(localStorage.getItem(trialStorageKey) || '0');
+        const allowedSec = trialMin * 60;
+
+        if (playedSec >= allowedSec) {
+          // すでに指定された合計時間を遊んでいる場合は強制終了画面を表示して停止
+          triggerTrialExpired(trialMin);
+          return;
+        }
+
+        // 残り時間カウントダウン開始
+        const timerBadge = document.getElementById('trial-timer-badge');
+        timerBadge.classList.remove('hidden');
+        updateTrialBadgeDisplay(allowedSec - playedSec);
+
+        clearInterval(trialTimerInterval);
+        trialTimerInterval = setInterval(() => {
+          playedSec++;
+          localStorage.setItem(trialStorageKey, playedSec.toString());
+          const remSec = allowedSec - playedSec;
+          updateTrialBadgeDisplay(remSec);
+
+          if (remSec <= 0) {
+            clearInterval(trialTimerInterval);
+            triggerTrialExpired(trialMin);
+          }
+        }, 1000);
+      } else if (isPurchased && trialMin > 0) {
+        const trialBadge = document.getElementById('trial-badge');
+        trialBadge.classList.remove('hidden');
+        trialBadge.className = 'text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded';
+        trialBadge.innerText = '✨ 製品版アンロック済み';
+      }
+
+      // プレゼンス・ハートビート開始（プレイ中・ゲーム名を配信）
+      startPresenceHeartbeat();
 
       log(`📦 ゲームデータを取得中: ${game.title}`);
       let targetUrl = game.entry_url;
@@ -1157,6 +1280,16 @@
     }
 
     // ★★★ ✏️ ゲーム編集 / アップデートモーダル制御 ★★★
+    window.toggleEditCustomTrial = (select) => {
+      const customInput = document.getElementById('edit-trial-custom');
+      if (select.value === 'custom') {
+        customInput.classList.remove('hidden');
+        customInput.focus();
+      } else {
+        customInput.classList.add('hidden');
+      }
+    };
+
     window.openEditModal = () => {
       if (!currentGame) return;
       document.getElementById('edit-game-title').value = currentGame.title || '';
@@ -1168,6 +1301,22 @@
       document.getElementById('edit-file-status').innerText = '未選択（既存のゲームファイルが維持されます）';
       newThumbnailBlob = null;
       newGameFilePayload = null;
+
+      // ⏳ 体験版設定の反映
+      const trialSelect = document.getElementById('edit-trial-select');
+      const trialCustom = document.getElementById('edit-trial-custom');
+      const trialMin = Number(currentGame.trial_duration_minutes) || 0;
+      if ([0, 5, 10, 15, 30].includes(trialMin)) {
+        trialSelect.value = trialMin.toString();
+        trialCustom.classList.add('hidden');
+      } else if (trialMin > 0) {
+        trialSelect.value = 'custom';
+        trialCustom.classList.remove('hidden');
+        trialCustom.value = trialMin;
+      } else {
+        trialSelect.value = '0';
+        trialCustom.classList.add('hidden');
+      }
 
       if (currentGame.thumbnail_url) {
         document.getElementById('edit-thumb-preview').innerHTML = `<img src="${currentGame.thumbnail_url}" class="w-full h-full object-cover object-center block">`;
@@ -1298,6 +1447,14 @@
       const changelog = document.getElementById('edit-changelog').value.trim();
       const saveBtn = document.getElementById('save-update-btn');
 
+      const trialSelectVal = document.getElementById('edit-trial-select').value;
+      let trialMinutes = 0;
+      if (trialSelectVal === 'custom') {
+        trialMinutes = parseInt(document.getElementById('edit-trial-custom').value) || 0;
+      } else {
+        trialMinutes = parseInt(trialSelectVal) || 0;
+      }
+
       if (!title) return alert('タイトルを入力してください！');
 
       saveBtn.disabled = true;
@@ -1308,6 +1465,7 @@
           title,
           tag,
           price_coins: price,
+          trial_duration_minutes: trialMinutes,
           description: desc
         };
 
@@ -1377,6 +1535,309 @@
         saveBtn.innerText = '🚀 アップデートを保存・公開する';
       }
     };
+
+    // ★★★ ⏳ 体験版タイマー制御 ＆ 強制終了 ★★★
+    function updateTrialBadgeDisplay(remSec) {
+      const badge = document.getElementById('trial-timer-badge');
+      if (remSec < 0) remSec = 0;
+      const m = Math.floor(remSec / 60);
+      const s = remSec % 60;
+      const timeStr = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      badge.innerText = `⏳ 体験版 残り ${timeStr}`;
+
+      if (remSec <= 60) {
+        badge.className = 'bg-rose-500/20 text-rose-300 border border-rose-500/50 text-[11px] font-mono px-2 py-0.5 rounded font-bold whitespace-nowrap animate-pulse';
+      } else {
+        badge.className = 'bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-mono px-2 py-0.5 rounded font-bold whitespace-nowrap';
+      }
+    }
+
+    function triggerTrialExpired(trialMin) {
+      log(`⏳ 体験版の制限時間（${trialMin}分）に達したため、ゲームを強制終了しました。`);
+      try {
+        iframe.srcdoc = `
+          <body style="background:#0b0f19;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+            <div style="text-align:center;padding:24px;">
+              <span style="font-size:48px;display:block;margin-bottom:12px;">⏳</span>
+              <h2 style="color:#f59e0b;margin:0 0 8px 0;font-size:18px;">体験版のプレイ時間が終了しました</h2>
+              <p style="color:#94a3b8;font-size:12px;margin:0;">製品版を購入すると、無制限でプレイできます！</p>
+            </div>
+          </body>
+        `;
+      } catch (e) {}
+
+      document.getElementById('trial-timer-badge').innerText = '⏳ 体験版 終了';
+      document.getElementById('trial-expired-limit').innerText = trialMin;
+
+      const actionDiv = document.getElementById('trial-action-buttons');
+      let buttonsHtml = '';
+      if (currentGame && currentGame.price_coins > 0) {
+        buttonsHtml += `
+          <button onclick="buyGame()" class="bg-gradient-to-r from-amber-500 to-pink-500 hover:opacity-90 text-slate-950 font-black px-5 py-3 rounded-xl text-xs shadow-xl transition">
+            💎 ${currentGame.price_coins} G で製品版を購入して無制限で遊ぶ！
+          </button>
+        `;
+      }
+      buttonsHtml += `
+        <a href="#review-form" onclick="document.getElementById('trial-expired-overlay').classList.add('hidden')" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs text-center transition">
+          ⭐ このゲームをレビューする
+        </a>
+        <a href="index.html" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-2.5 rounded-xl text-xs text-center transition">
+          🏠 トップ一覧へ戻る
+        </a>
+      `;
+      actionDiv.innerHTML = buttonsHtml;
+      document.getElementById('trial-expired-overlay').classList.remove('hidden');
+    }
+
+    // ★★★ 📡 プレゼンス・ハートビート（リアルタイムオンライン配信） ★★★
+    function startPresenceHeartbeat() {
+      async function sendHeartbeat() {
+        if (!currentUser || !currentGame) return;
+        const sessionSec = Math.floor((Date.now() - playSessionStart) / 1000);
+        try {
+          await fetch('/api/presence', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_email: currentUser.email,
+              username: currentUser.email.split('@')[0],
+              status: 'playing',
+              current_game_id: gameId,
+              current_game_title: currentGame.title,
+              current_game_thumb: currentGame.thumbnail_url,
+              current_session_seconds: sessionSec
+            })
+          });
+        } catch (e) {}
+      }
+
+      sendHeartbeat();
+      setInterval(sendHeartbeat, 12000);
+    }
+
+    // ★★★ 👥 強化フレンド機能（オンライン・プレイ中ゲーム・累計プレイ時間） ★★★
+    window.openFriendModal = async () => {
+      if (!currentUser) return alert('フレンド機能を利用するにはログインが必要です');
+      document.getElementById('friend-modal').classList.remove('hidden');
+      loadFriendsStatus();
+    };
+
+    window.closeFriendModal = () => {
+      document.getElementById('friend-modal').classList.add('hidden');
+    };
+
+    async function loadFriendsStatus() {
+      const container = document.getElementById('friends-list-container');
+      container.innerHTML = '<div class="text-center py-6 text-slate-400 font-mono text-xs">フレンドの最新オンライン状況を取得中...</div>';
+
+      let friendEmails = [];
+      try {
+        const res = await fetch(`/api/friends?user_email=${encodeURIComponent(currentUser.email)}`);
+        if (res.ok) {
+          friendEmails = await res.json();
+        }
+      } catch (e) {}
+
+      // Supabase friends テーブルともマージ
+      try {
+        const { data: supaFriends } = await supabase.from('friends').select('friend_email').eq('user_email', currentUser.email);
+        if (supaFriends) {
+          supaFriends.forEach(f => {
+            if (!friendEmails.includes(f.friend_email)) friendEmails.push(f.friend_email);
+          });
+        }
+      } catch (e) {}
+
+      if (friendEmails.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-8 text-slate-400 space-y-2">
+            <p>まだフレンドがいません。</p>
+            <p class="text-[11px] text-slate-500">上部の入力欄からメールアドレスを追加してください。</p>
+          </div>
+        `;
+        return;
+      }
+
+      let presenceMap = {};
+      try {
+        const pRes = await fetch(`/api/presence?emails=${encodeURIComponent(friendEmails.join(','))}`);
+        if (pRes.ok) {
+          presenceMap = await pRes.json();
+        }
+      } catch (e) {}
+
+      renderFriendsList(friendEmails, presenceMap);
+    }
+
+    function renderFriendsList(emails, presenceMap) {
+      const container = document.getElementById('friends-list-container');
+      const html = emails.map(email => {
+        const pres = presenceMap[email] || {
+          user_email: email,
+          username: email.split('@')[0],
+          is_online: false,
+          status: 'offline',
+          current_game: null,
+          last_seen: null,
+          play_history: []
+        };
+
+        const isOnline = pres.is_online;
+        const avatarLetter = (pres.username || email)[0].toUpperCase();
+        const safeId = email.replace(/[^a-zA-Z0-9]/g, '_');
+
+        return `
+          <div class="bg-[#1e1e1e] p-3.5 rounded-2xl border border-[#333] space-y-2.5 shadow-md">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="relative shrink-0">
+                  <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow">
+                    ${avatarLetter}
+                  </div>
+                  <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#1e1e1e] ${isOnline ? 'bg-emerald-500' : 'bg-slate-500'}"></span>
+                </div>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-bold text-xs text-white truncate">${pres.username}</span>
+                    ${isOnline 
+                      ? `<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full font-mono">🟢 ONLINE</span>`
+                      : `<span class="bg-slate-800 text-slate-400 border border-slate-700 text-[10px] px-2 py-0.5 rounded-full font-mono">⚪ OFFLINE</span>`
+                    }
+                  </div>
+                  <span class="text-[10px] text-slate-400 font-mono block truncate">${email}</span>
+                </div>
+              </div>
+
+              <button onclick="toggleFriendHistory('${safeId}')" class="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-bold whitespace-nowrap bg-indigo-950/40 hover:bg-indigo-900/50 px-2.5 py-1.5 rounded-xl border border-indigo-500/30 transition shrink-0">
+                <span>📊</span> プレイ履歴 (${pres.play_history?.length || 0})
+              </button>
+            </div>
+
+            <!-- 現在プレイ中のゲームステータス -->
+            ${pres.current_game ? `
+              <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <div class="w-8 h-8 rounded-lg bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center border border-amber-500/40">
+                    ${pres.current_game.thumb ? `<img src="${pres.current_game.thumb}" class="w-full h-full object-cover">` : '🎮'}
+                  </div>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[10px] font-black text-amber-400 tracking-wider uppercase">NOW PLAYING</span>
+                      <span class="text-[10px] text-slate-400 font-mono">(${formatPlayTime(pres.current_game.session_seconds)}経過)</span>
+                    </div>
+                    <span class="text-xs font-bold text-slate-200 truncate block">${pres.current_game.title}</span>
+                  </div>
+                </div>
+                ${pres.current_game.id !== gameId ? `
+                  <a href="play.html?id=${pres.current_game.id}" class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:opacity-90 text-slate-950 text-xs font-black px-3 py-1.5 rounded-lg shadow whitespace-nowrap transition flex items-center gap-1 shrink-0">
+                    一緒にプレイ →
+                  </a>
+                ` : `
+                  <span class="text-[11px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/30 whitespace-nowrap shrink-0">
+                    同じゲーム中！
+                  </span>
+                `}
+              </div>
+            ` : (isOnline ? `
+              <div class="text-[11px] text-slate-400 flex items-center gap-1.5 px-1 font-mono">
+                <span>🏠</span> G-HUB をブラウズ中
+              </div>
+            ` : `
+              <div class="text-[11px] text-slate-500 flex items-center gap-1.5 px-1 font-mono">
+                <span>💤</span> 最終ログイン: ${pres.last_seen ? formatLastSeen(pres.last_seen) : '記録なし'}
+              </div>
+            `)}
+
+            <!-- 展開アコーディオン: これまでに遊んだゲームと累計プレイ時間 -->
+            <div id="friend-history-${safeId}" class="hidden pt-2.5 border-t border-[#333] space-y-2">
+              <div class="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                <span>🎮 これまでに遊んだゲーム一覧</span>
+                <span>累計プレイ時間</span>
+              </div>
+              ${pres.play_history && pres.play_history.length > 0 ? `
+                <div class="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                  ${pres.play_history.map(item => `
+                    <div class="bg-[#161616] p-2 rounded-xl border border-[#2b2b2b] flex items-center justify-between gap-2">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <div class="w-8 h-8 rounded-lg bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center border border-[#333]">
+                          ${item.game_thumb ? `<img src="${item.game_thumb}" class="w-full h-full object-cover">` : '🕹️'}
+                        </div>
+                        <div class="min-w-0">
+                          <span class="font-bold text-xs text-slate-200 truncate block">${item.game_title}</span>
+                          <span class="text-[10px] text-slate-500 font-mono">最終: ${formatLastSeen(item.last_played_at)}</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2 shrink-0">
+                        <span class="text-xs font-mono font-bold text-indigo-300 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-800">
+                          ${formatPlayTime(item.total_seconds)}
+                        </span>
+                        <a href="play.html?id=${item.game_id}" class="text-[11px] text-indigo-400 hover:underline font-bold">遊ぶ →</a>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : `
+                <p class="text-slate-500 text-xs py-2 text-center">まだ遊んだゲームの履歴はありません。</p>
+              `}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = html;
+    }
+
+    window.toggleFriendHistory = (safeId) => {
+      const el = document.getElementById(`friend-history-${safeId}`);
+      if (el) el.classList.toggle('hidden');
+    };
+
+    window.handleAddFriend = async (e) => {
+      e.preventDefault();
+      const input = document.getElementById('friend-add-input');
+      const friendEmail = input.value.trim();
+      if (!friendEmail) return;
+      if (friendEmail === currentUser.email) return alert('自分自身は追加できません！');
+
+      try {
+        await fetch('/api/friends', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_email: currentUser.email, friend_email: friendEmail })
+        });
+      } catch (err) {}
+
+      try {
+        await supabase.from('friends').insert({ user_email: currentUser.email, friend_email: friendEmail });
+      } catch (err) {}
+
+      input.value = '';
+      alert(`👥 ${friendEmail} をフレンドに追加しました！`);
+      loadFriendsStatus();
+    };
+
+    function formatPlayTime(seconds) {
+      if (!seconds || seconds <= 0) return '1分未満';
+      const m = Math.floor(seconds / 60);
+      if (m < 60) return `${m}分`;
+      const h = Math.floor(m / 60);
+      const remM = m % 60;
+      return remM > 0 ? `${h}時間${remM}分` : `${h}時間`;
+    }
+
+    function formatLastSeen(isoOrTimestamp) {
+      if (!isoOrTimestamp) return '不明';
+      const t = new Date(isoOrTimestamp).getTime();
+      const diffSec = Math.floor((Date.now() - t) / 1000);
+      if (diffSec < 60) return 'たった今';
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}分前`;
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return `${diffHr}時間前`;
+      const diffDay = Math.floor(diffHr / 24);
+      return `${diffDay}日前`;
+    }
 
     initEsbuild();
   </script>

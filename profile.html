@@ -85,6 +85,30 @@
       </div>
     </div>
 
+    <!-- 🎮 あなたのプレイ履歴 ＆ 累計プレイ時間 -->
+    <div class="space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-black text-slate-200">🎮 あなたのプレイ履歴 ＆ 累計プレイ時間</h3>
+        <span id="my-history-count" class="text-xs text-slate-400 font-mono">0 作品</span>
+      </div>
+      <div id="my-play-history-list" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <p class="text-slate-500 text-xs col-span-3">プレイ履歴を読み込み中...</p>
+      </div>
+    </div>
+
+    <!-- 👥 フレンドのオンライン状況 & プレイ中ゲーム -->
+    <div class="space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-black text-slate-200 flex items-center gap-2">
+          <span>👥</span> フレンドの活動状況
+        </h3>
+        <button onclick="initFriendsSection()" class="text-xs text-indigo-400 hover:underline font-bold">🔄 最新状況に更新</button>
+      </div>
+      <div id="profile-friends-list" class="space-y-3">
+        <p class="text-slate-500 text-xs">フレンドを読み込み中...</p>
+      </div>
+    </div>
+
   </div>
 
   <!-- プロフィール編集モーダル -->
@@ -177,6 +201,243 @@
           </div>
         </div>
       `).join('');
+
+      initMyPlayHistory();
+      initFriendsSection();
+      startPresenceHeartbeat();
+    }
+
+    // ★★★ あなたのプレイ履歴 ＆ 累計プレイ時間 ★★★
+    async function initMyPlayHistory() {
+      const container = document.getElementById('my-play-history-list');
+      const countBadge = document.getElementById('my-history-count');
+      
+      let historyList = [];
+      try {
+        const res = await fetch(`/api/presence?user_email=${encodeURIComponent(currentUser.email)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data[currentUser.email] && data[currentUser.email].play_history) {
+            historyList = data[currentUser.email].play_history;
+          }
+        }
+      } catch (e) {}
+
+      // localStorageの直近プレイともマージ
+      try {
+        const recentLocal = JSON.parse(localStorage.getItem('ghub_recent_games') || '[]');
+        if (recentLocal.length > 0 && historyList.length === 0) {
+          const ids = recentLocal.map(item => typeof item === 'string' ? item : item.id);
+          const { data: gList } = await supabase.from('games').select('*').in('id', ids.slice(0, 9));
+          if (gList) {
+            historyList = gList.map(g => ({
+              game_id: g.id,
+              game_title: g.title,
+              game_thumb: g.thumbnail_url,
+              total_seconds: 600,
+              last_played_at: new Date().toISOString()
+            }));
+          }
+        }
+      } catch (e) {}
+
+      if (!historyList || historyList.length === 0) {
+        countBadge.innerText = '0 作品';
+        container.innerHTML = '<p class="text-slate-500 text-xs col-span-3">まだ遊んだゲームの履歴はありません。<a href="index.html" class="text-indigo-400 hover:underline ml-1">ゲームを探しに行く →</a></p>';
+        return;
+      }
+
+      countBadge.innerText = `${historyList.length} 作品`;
+      container.innerHTML = historyList.map(item => `
+        <div class="bg-[#111827] border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+          <div>
+            <div class="aspect-video bg-slate-950 rounded-xl mb-3 overflow-hidden flex items-center justify-center w-full relative">
+              ${item.game_thumb 
+                ? `<img src="${item.game_thumb}" alt="${item.game_title}" loading="lazy" class="game-thumb-img">` 
+                : '<span class="text-3xl">🕹️</span>'}
+            </div>
+            <h4 class="font-bold text-sm text-slate-100 truncate">${item.game_title}</h4>
+            <div class="flex justify-between items-center text-[11px] text-slate-400 mt-2 font-mono">
+              <span class="text-indigo-400 font-bold bg-indigo-950/40 px-2 py-0.5 rounded border border-indigo-500/30">
+                ⏳ プレイ: ${formatPlayTime(item.total_seconds)}
+              </span>
+              <span class="text-[10px] text-slate-500">${formatLastSeen(item.last_played_at)}</span>
+            </div>
+          </div>
+          <div class="mt-3">
+            <a href="play.html?id=${item.game_id}" class="block text-center bg-slate-800 hover:bg-slate-700 py-2 rounded-xl text-xs font-bold text-indigo-400 transition">
+              もう一度遊ぶ
+            </a>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // ★★★ 👥 フレンドのオンライン状況 & プレイ中ゲーム ★★★
+    window.initFriendsSection = async () => {
+      const container = document.getElementById('profile-friends-list');
+      container.innerHTML = '<div class="text-xs text-slate-500 font-mono">フレンドの状況を取得中...</div>';
+
+      let friendEmails = [];
+      try {
+        const res = await fetch(`/api/friends?user_email=${encodeURIComponent(currentUser.email)}`);
+        if (res.ok) {
+          friendEmails = await res.json();
+        }
+      } catch (e) {}
+
+      try {
+        const { data: supaFriends } = await supabase.from('friends').select('friend_email').eq('user_email', currentUser.email);
+        if (supaFriends) {
+          supaFriends.forEach(f => {
+            if (!friendEmails.includes(f.friend_email)) friendEmails.push(f.friend_email);
+          });
+        }
+      } catch (e) {}
+
+      if (friendEmails.length === 0) {
+        container.innerHTML = '<p class="text-slate-500 text-xs">フレンドはいません。<a href="index.html" class="text-indigo-400 hover:underline ml-1">ホームのフレンド画面から追加できます</a></p>';
+        return;
+      }
+
+      let presenceMap = {};
+      try {
+        const pRes = await fetch(`/api/presence?emails=${encodeURIComponent(friendEmails.join(','))}`);
+        if (pRes.ok) presenceMap = await pRes.json();
+      } catch (e) {}
+
+      container.innerHTML = friendEmails.map(email => {
+        const pres = presenceMap[email] || {
+          user_email: email,
+          username: email.split('@')[0],
+          is_online: false,
+          current_game: null,
+          last_seen: null,
+          play_history: []
+        };
+
+        const isOnline = pres.is_online;
+        const avatarLetter = (pres.username || email)[0].toUpperCase();
+        const safeId = email.replace(/[^a-zA-Z0-9]/g, '_');
+
+        return `
+          <div class="bg-[#111827] p-4 rounded-2xl border border-slate-800 space-y-3">
+            <div class="flex items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div class="relative">
+                  <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow">
+                    ${avatarLetter}
+                  </div>
+                  <span class="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#111827] ${isOnline ? 'bg-emerald-500' : 'bg-slate-500'}"></span>
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-xs text-white">${pres.username}</span>
+                    ${isOnline 
+                      ? `<span class="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.2 rounded-full font-mono">🟢 ONLINE</span>`
+                      : `<span class="bg-slate-800 text-slate-400 border border-slate-700 text-[10px] px-2 py-0.2 rounded-full font-mono">⚪ OFFLINE</span>`
+                    }
+                  </div>
+                  <span class="text-[10px] text-slate-400 font-mono">${email}</span>
+                </div>
+              </div>
+
+              <button onclick="toggleFriendHistory('${safeId}')" class="text-xs text-indigo-400 hover:underline flex items-center gap-1 font-bold whitespace-nowrap bg-indigo-950/40 px-2.5 py-1.5 rounded-xl border border-indigo-500/30">
+                <span>📊</span> プレイ履歴 (${pres.play_history?.length || 0})
+              </button>
+            </div>
+
+            ${pres.current_game ? `
+              <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-2.5 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2 min-w-0">
+                  <span class="text-base animate-pulse">🎮</span>
+                  <div class="min-w-0">
+                    <span class="text-[10px] font-black text-amber-400 tracking-wider uppercase block">NOW PLAYING</span>
+                    <span class="text-xs font-bold text-slate-200 truncate block">${pres.current_game.title}</span>
+                  </div>
+                </div>
+                <a href="play.html?id=${pres.current_game.id}" class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:opacity-90 text-slate-950 text-xs font-black px-3 py-1.5 rounded-lg shadow whitespace-nowrap">
+                  一緒にプレイ →
+                </a>
+              </div>
+            ` : (isOnline ? `
+              <div class="text-[11px] text-slate-400 font-mono">🏠 G-HUB をブラウズ中</div>
+            ` : `
+              <div class="text-[11px] text-slate-500 font-mono">💤 最終ログイン: ${pres.last_seen ? formatLastSeen(pres.last_seen) : '記録なし'}</div>
+            `)}
+
+            <!-- 展開アコーディオン: プレイ履歴 -->
+            <div id="friend-history-${safeId}" class="hidden pt-2 border-t border-slate-800 space-y-2">
+              <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                これまでに遊んだゲームと累計時間
+              </div>
+              ${pres.play_history && pres.play_history.length > 0 ? `
+                <div class="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  ${pres.play_history.map(item => `
+                    <div class="bg-slate-950 p-2 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
+                      <span class="text-xs font-bold text-slate-200 truncate">${item.game_title}</span>
+                      <div class="flex items-center gap-2 shrink-0">
+                        <span class="text-xs font-mono text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-800">
+                          ${formatPlayTime(item.total_seconds)}
+                        </span>
+                        <a href="play.html?id=${item.game_id}" class="text-[11px] text-indigo-400 hover:underline">遊ぶ →</a>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : `
+                <p class="text-slate-500 text-xs py-1">まだ遊んだゲームの履歴はありません。</p>
+              `}
+            </div>
+          </div>
+        `;
+      }).join('');
+    };
+
+    window.toggleFriendHistory = (safeId) => {
+      const el = document.getElementById(`friend-history-${safeId}`);
+      if (el) el.classList.toggle('hidden');
+    };
+
+    function startPresenceHeartbeat() {
+      async function sendHeartbeat() {
+        if (!currentUser) return;
+        try {
+          await fetch('/api/presence', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_email: currentUser.email,
+              username: currentUser.email.split('@')[0],
+              status: 'online'
+            })
+          });
+        } catch (e) {}
+      }
+      sendHeartbeat();
+      setInterval(sendHeartbeat, 15000);
+    }
+
+    function formatPlayTime(seconds) {
+      if (!seconds || seconds <= 0) return '1分未満';
+      const m = Math.floor(seconds / 60);
+      if (m < 60) return `${m}分`;
+      const h = Math.floor(m / 60);
+      const remM = m % 60;
+      return remM > 0 ? `${h}時間${remM}分` : `${h}時間`;
+    }
+
+    function formatLastSeen(isoOrTimestamp) {
+      if (!isoOrTimestamp) return '不明';
+      const t = new Date(isoOrTimestamp).getTime();
+      const diffSec = Math.floor((Date.now() - t) / 1000);
+      if (diffSec < 60) return 'たった今';
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}分前`;
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return `${diffHr}時間前`;
+      const diffDay = Math.floor(diffHr / 24);
+      return `${diffDay}日前`;
     }
 
     window.openEditModal = () => document.getElementById('edit-modal').classList.remove('hidden');

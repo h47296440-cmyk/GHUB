@@ -94,6 +94,204 @@ app.post('/api/game-updates', (req, res) => {
   res.json({ success: true, update: newUpdate });
 });
 
+// フレンド・プレゼンス ＆ プレイ履歴用データストア
+const presenceStore = new Map();
+const playHistoryStore = new Map();
+const friendsStore = new Map();
+
+function seedDemoFriends() {
+  const now = Date.now();
+  const demoUsers = [
+    {
+      user_email: 'ren_dev@g-hub.io',
+      username: 'Ren (レン)',
+      status: 'playing',
+      current_game_id: 'demo-retro-runner',
+      current_game_title: 'Pixel Cyber Runner',
+      current_game_thumb: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=640&q=80',
+      current_session_seconds: 480,
+      last_seen: now
+    },
+    {
+      user_email: 'yuki_game@g-hub.io',
+      username: 'Yuki (ユキ)',
+      status: 'playing',
+      current_game_id: 'demo-dungeon-quest',
+      current_game_title: 'Dungeon Escape 2D',
+      current_game_thumb: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=640&q=80',
+      current_session_seconds: 1320,
+      last_seen: now
+    },
+    {
+      user_email: 'alex_indie@g-hub.io',
+      username: 'Alex (アレックス)',
+      status: 'online',
+      current_game_id: null,
+      current_game_title: null,
+      current_session_seconds: 0,
+      last_seen: now - 15000
+    },
+    {
+      user_email: 'charlotte@g-hub.io',
+      username: 'Charlotte (シャルロット)',
+      status: 'offline',
+      current_game_id: null,
+      current_game_title: null,
+      current_session_seconds: 0,
+      last_seen: now - 3600000 * 3
+    }
+  ];
+
+  for (const u of demoUsers) {
+    presenceStore.set(u.user_email, u);
+  }
+
+  const renHistory = new Map();
+  renHistory.set('demo-retro-runner', {
+    game_id: 'demo-retro-runner',
+    game_title: 'Pixel Cyber Runner',
+    game_thumb: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=640&q=80',
+    total_seconds: 5240,
+    last_played_at: new Date(now - 120000).toISOString()
+  });
+  renHistory.set('demo-space-fighter', {
+    game_id: 'demo-space-fighter',
+    game_title: 'Galactic Defense',
+    game_thumb: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=640&q=80',
+    total_seconds: 2880,
+    last_played_at: new Date(now - 86400000).toISOString()
+  });
+  playHistoryStore.set('ren_dev@g-hub.io', renHistory);
+
+  const yukiHistory = new Map();
+  yukiHistory.set('demo-dungeon-quest', {
+    game_id: 'demo-dungeon-quest',
+    game_title: 'Dungeon Escape 2D',
+    game_thumb: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=640&q=80',
+    total_seconds: 9400,
+    last_played_at: new Date(now - 300000).toISOString()
+  });
+  yukiHistory.set('demo-puzzle-match', {
+    game_id: 'demo-puzzle-match',
+    game_title: 'Neon Crystal Block',
+    game_thumb: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=640&q=80',
+    total_seconds: 1800,
+    last_played_at: new Date(now - 86400000 * 2).toISOString()
+  });
+  playHistoryStore.set('yuki_game@g-hub.io', yukiHistory);
+}
+
+seedDemoFriends();
+
+// フレンド管理 API
+app.get('/api/friends', (req, res) => {
+  const user_email = req.query.user_email;
+  if (!user_email) return res.json([]);
+  let set = friendsStore.get(user_email);
+  if (!set || set.size === 0) {
+    set = new Set(['ren_dev@g-hub.io', 'yuki_game@g-hub.io', 'alex_indie@g-hub.io']);
+    friendsStore.set(user_email, set);
+  }
+  res.json(Array.from(set));
+});
+
+app.post('/api/friends', (req, res) => {
+  const { user_email, friend_email } = req.body;
+  if (!user_email || !friend_email) return res.status(400).json({ error: 'Missing emails' });
+  let set = friendsStore.get(user_email);
+  if (!set) {
+    set = new Set(['ren_dev@g-hub.io', 'yuki_game@g-hub.io']);
+    friendsStore.set(user_email, set);
+  }
+  set.add(friend_email);
+  res.json({ success: true, friends: Array.from(set) });
+});
+
+app.delete('/api/friends', (req, res) => {
+  const { user_email, friend_email } = req.body;
+  if (!user_email || !friend_email) return res.status(400).json({ error: 'Missing emails' });
+  let set = friendsStore.get(user_email);
+  if (set) {
+    set.delete(friend_email);
+  }
+  res.json({ success: true });
+}); // user_email -> (game_id -> record)
+
+// プレゼンス更新（ハートビート）
+app.post('/api/presence', (req, res) => {
+  const { user_email, username, status, current_game_id, current_game_title, current_game_thumb, current_session_seconds } = req.body;
+  if (!user_email) return res.status(400).json({ error: 'Missing user_email' });
+
+  const record = {
+    user_email,
+    username: username || user_email.split('@')[0],
+    status: status || 'online',
+    current_game_id: current_game_id || null,
+    current_game_title: current_game_title || null,
+    current_game_thumb: current_game_thumb || null,
+    current_session_seconds: Number(current_session_seconds) || 0,
+    last_seen: Date.now()
+  };
+  presenceStore.set(user_email, record);
+
+  // プレイ中なら履歴にも加算
+  if (current_game_id && current_game_title) {
+    let userHistory = playHistoryStore.get(user_email);
+    if (!userHistory) {
+      userHistory = new Map();
+      playHistoryStore.set(user_email, userHistory);
+    }
+    const existing = userHistory.get(current_game_id);
+    const totalSec = (existing?.total_seconds || 0) + 10;
+    userHistory.set(current_game_id, {
+      game_id: current_game_id,
+      game_title: current_game_title,
+      game_thumb: current_game_thumb || existing?.game_thumb,
+      total_seconds: totalSec,
+      last_played_at: new Date().toISOString()
+    });
+  }
+
+  res.json({ success: true });
+});
+
+// プレゼンス＆プレイ履歴取得
+app.get('/api/presence', (req, res) => {
+  const emailsQuery = req.query.emails;
+  const targetEmail = req.query.user_email;
+
+  const emails = emailsQuery ? emailsQuery.split(',').map(e => e.trim()) : (targetEmail ? [targetEmail] : []);
+  const now = Date.now();
+  const results = {};
+
+  const checkEmails = emails.length > 0 ? emails : Array.from(presenceStore.keys());
+
+  for (const email of checkEmails) {
+    const pres = presenceStore.get(email);
+    const isOnline = pres ? (now - pres.last_seen < 60000) : false;
+
+    const userHistoryMap = playHistoryStore.get(email);
+    const historyList = userHistoryMap ? Array.from(userHistoryMap.values()).sort((a, b) => new Date(b.last_played_at).getTime() - new Date(a.last_played_at).getTime()) : [];
+
+    results[email] = {
+      user_email: email,
+      username: pres?.username || email.split('@')[0],
+      is_online: isOnline,
+      status: isOnline ? (pres?.status || 'online') : 'offline',
+      current_game: (isOnline && pres?.status === 'playing' && pres?.current_game_id) ? {
+        id: pres.current_game_id,
+        title: pres.current_game_title,
+        thumb: pres.current_game_thumb,
+        session_seconds: pres.current_session_seconds || 0
+      } : null,
+      last_seen: pres ? new Date(pres.last_seen).toISOString() : null,
+      play_history: historyList
+    };
+  }
+
+  res.json(results);
+});
+
 // 3. G-AI (Qwen 2.5 Coder) 二重化エンドポイント
 app.post('/ai', async (req, res) => {
   const { systemPrompt, userPrompt, maxTokens = 1500 } = req.body;
