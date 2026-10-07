@@ -136,91 +136,244 @@ interface GamePlayRecord {
 const presenceStore = new Map<string, UserPresence>();
 const playHistoryStore = new Map<string, Map<string, GamePlayRecord>>(); // user_email -> (game_id -> record)
 const friendsStore = new Map<string, Set<string>>(); // user_email -> Set of friend_emails
+const gamesStore = new Map<string, any>(); // game_id -> game object
+const payloadsStore = new Map<string, { filename: string; contentType: string; buffer: Buffer }>();
 
-// デモユーザーのプレゼンス＆プレイ履歴を設定
-function seedDemoFriends() {
-  const now = Date.now();
-  const demoUsers: UserPresence[] = [
-    {
-      user_email: 'ren_dev@g-hub.io',
-      username: 'Ren (レン)',
-      status: 'playing',
-      current_game_id: 'demo-retro-runner',
-      current_game_title: 'Pixel Cyber Runner',
-      current_game_thumb: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=640&q=80',
-      current_session_seconds: 480,
-      last_seen: now
-    },
-    {
-      user_email: 'yuki_game@g-hub.io',
-      username: 'Yuki (ユキ)',
-      status: 'playing',
-      current_game_id: 'demo-dungeon-quest',
-      current_game_title: 'Dungeon Escape 2D',
-      current_game_thumb: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=640&q=80',
-      current_session_seconds: 1320,
-      last_seen: now
-    },
-    {
-      user_email: 'alex_indie@g-hub.io',
-      username: 'Alex (アレックス)',
-      status: 'online',
-      current_game_id: null,
-      current_game_title: null,
-      current_session_seconds: 0,
-      last_seen: now - 15000
-    },
-    {
-      user_email: 'charlotte@g-hub.io',
-      username: 'Charlotte (シャルロット)',
-      status: 'offline',
-      current_game_id: null,
-      current_game_title: null,
-      current_session_seconds: 0,
-      last_seen: now - 3600000 * 3
+let cachedActualGames: any[] = [];
+let lastDemoFriendsRefresh = 0;
+
+// 実際のゲームリストを取得してデモフレンドのプレイ中ゲーム＆プレイ時間をランダム設定
+async function refreshDemoFriendsFromActualGames() {
+  try {
+    // 1. Supabaseから実際のゲームを取得
+    const res = await fetch('https://ddcnoghsiuxfhnwmtpyn.supabase.co/rest/v1/games?select=*', {
+      headers: {
+        'apikey': 'sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj',
+        'Authorization': 'Bearer sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj'
+      }
+    });
+
+    let games: any[] = [];
+    if (res.ok) {
+      games = await res.json();
     }
-  ];
 
-  for (const u of demoUsers) {
-    presenceStore.set(u.user_email, u);
+    // 2. サーバー内のローカルゲームも合算
+    for (const g of gamesStore.values()) {
+      if (!games.some(x => x.id === g.id)) {
+        games.push(g);
+      }
+    }
+
+    if (games.length > 0) {
+      cachedActualGames = games;
+    }
+  } catch (err) {
+    console.warn('実ゲーム取得エラー（キャッシュを使用）:', err);
   }
 
-  const renHistory = new Map<string, GamePlayRecord>();
-  renHistory.set('demo-retro-runner', {
-    game_id: 'demo-retro-runner',
-    game_title: 'Pixel Cyber Runner',
-    game_thumb: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=640&q=80',
-    total_seconds: 5240,
-    last_played_at: new Date(now - 120000).toISOString()
+  // 利用可能なゲーム一覧（実ゲームがあればそれを使用、なければフォールバック）
+  const pool = cachedActualGames.length > 0 ? cachedActualGames : [
+    { id: 'demo-retro-runner', title: 'Pixel Cyber Runner', thumbnail_url: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=640&q=80' },
+    { id: 'demo-dungeon-quest', title: 'Dungeon Escape 2D', thumbnail_url: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=640&q=80' },
+    { id: 'demo-space-fighter', title: 'Galactic Defense', thumbnail_url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=640&q=80' }
+  ];
+
+  const now = Date.now();
+  // 配列をシャッフルする補助関数
+  const shuffled = [...pool].sort(() => 0.5 - Math.random());
+
+  // Ren (レン)
+  const renGame = shuffled[0] || pool[0];
+  const renSessionSec = Math.floor(180 + Math.random() * 2100); // 3分〜38分
+  presenceStore.set('ren_dev@g-hub.io', {
+    user_email: 'ren_dev@g-hub.io',
+    username: 'Ren (レン)',
+    status: 'playing',
+    current_game_id: renGame.id,
+    current_game_title: renGame.title,
+    current_game_thumb: renGame.thumbnail_url || null,
+    current_session_seconds: renSessionSec,
+    last_seen: now
   });
-  renHistory.set('demo-space-fighter', {
-    game_id: 'demo-space-fighter',
-    game_title: 'Galactic Defense',
-    game_thumb: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=640&q=80',
-    total_seconds: 2880,
-    last_played_at: new Date(now - 86400000).toISOString()
+
+  const renHistory = new Map<string, GamePlayRecord>();
+  const renPlayedPool = [...pool].sort(() => 0.5 - Math.random()).slice(0, Math.min(4, pool.length));
+  // プレイ中ゲームも履歴に追加
+  if (!renPlayedPool.some(g => g.id === renGame.id)) renPlayedPool.unshift(renGame);
+  renPlayedPool.forEach((g, idx) => {
+    // ランダムなプレイ時間（15分〜3時間）
+    const totalSec = Math.floor(900 + Math.random() * 9900);
+    const lastPlayed = new Date(now - (idx * 3600000 * 12 + Math.floor(Math.random() * 1800000))).toISOString();
+    renHistory.set(g.id, {
+      game_id: g.id,
+      game_title: g.title,
+      game_thumb: g.thumbnail_url || undefined,
+      total_seconds: totalSec,
+      last_played_at: lastPlayed
+    });
   });
   playHistoryStore.set('ren_dev@g-hub.io', renHistory);
 
-  const yukiHistory = new Map<string, GamePlayRecord>();
-  yukiHistory.set('demo-dungeon-quest', {
-    game_id: 'demo-dungeon-quest',
-    game_title: 'Dungeon Escape 2D',
-    game_thumb: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=640&q=80',
-    total_seconds: 9400,
-    last_played_at: new Date(now - 300000).toISOString()
+  // Yuki (ユキ)
+  const yukiGame = (pool.length > 1 ? shuffled[1] : pool[0]) || pool[0];
+  const yukiSessionSec = Math.floor(300 + Math.random() * 2700); // 5分〜50分
+  presenceStore.set('yuki_game@g-hub.io', {
+    user_email: 'yuki_game@g-hub.io',
+    username: 'Yuki (ユキ)',
+    status: 'playing',
+    current_game_id: yukiGame.id,
+    current_game_title: yukiGame.title,
+    current_game_thumb: yukiGame.thumbnail_url || null,
+    current_session_seconds: yukiSessionSec,
+    last_seen: now
   });
-  yukiHistory.set('demo-puzzle-match', {
-    game_id: 'demo-puzzle-match',
-    game_title: 'Neon Crystal Block',
-    game_thumb: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=640&q=80',
-    total_seconds: 1800,
-    last_played_at: new Date(now - 86400000 * 2).toISOString()
+
+  const yukiHistory = new Map<string, GamePlayRecord>();
+  const yukiPlayedPool = [...pool].sort(() => 0.5 - Math.random()).slice(0, Math.min(4, pool.length));
+  if (!yukiPlayedPool.some(g => g.id === yukiGame.id)) yukiPlayedPool.unshift(yukiGame);
+  yukiPlayedPool.forEach((g, idx) => {
+    const totalSec = Math.floor(1200 + Math.random() * 11000); // 20分〜3時間20分
+    const lastPlayed = new Date(now - (idx * 3600000 * 8 + Math.floor(Math.random() * 3600000))).toISOString();
+    yukiHistory.set(g.id, {
+      game_id: g.id,
+      game_title: g.title,
+      game_thumb: g.thumbnail_url || undefined,
+      total_seconds: totalSec,
+      last_played_at: lastPlayed
+    });
   });
   playHistoryStore.set('yuki_game@g-hub.io', yukiHistory);
+
+  // Alex (アレックス)
+  const alexIsPlaying = Math.random() > 0.35;
+  const alexGame = alexIsPlaying ? (shuffled[2] || shuffled[0] || pool[0]) : null;
+  presenceStore.set('alex_indie@g-hub.io', {
+    user_email: 'alex_indie@g-hub.io',
+    username: 'Alex (アレックス)',
+    status: alexIsPlaying ? 'playing' : 'online',
+    current_game_id: alexGame ? alexGame.id : null,
+    current_game_title: alexGame ? alexGame.title : null,
+    current_game_thumb: alexGame ? (alexGame.thumbnail_url || null) : null,
+    current_session_seconds: alexIsPlaying ? Math.floor(120 + Math.random() * 1500) : 0,
+    last_seen: now - Math.floor(Math.random() * 20000)
+  });
+
+  const alexHistory = new Map<string, GamePlayRecord>();
+  const alexPlayedPool = [...pool].sort(() => 0.5 - Math.random()).slice(0, Math.min(3, pool.length));
+  if (alexGame && !alexPlayedPool.some(g => g.id === alexGame.id)) alexPlayedPool.unshift(alexGame);
+  alexPlayedPool.forEach((g, idx) => {
+    const totalSec = Math.floor(600 + Math.random() * 7000);
+    const lastPlayed = new Date(now - (idx * 3600000 * 18 + Math.floor(Math.random() * 3600000))).toISOString();
+    alexHistory.set(g.id, {
+      game_id: g.id,
+      game_title: g.title,
+      game_thumb: g.thumbnail_url || undefined,
+      total_seconds: totalSec,
+      last_played_at: lastPlayed
+    });
+  });
+  playHistoryStore.set('alex_indie@g-hub.io', alexHistory);
+
+  // Charlotte (シャルロット) - オフライン
+  presenceStore.set('charlotte@g-hub.io', {
+    user_email: 'charlotte@g-hub.io',
+    username: 'Charlotte (シャルロット)',
+    status: 'offline',
+    current_game_id: null,
+    current_game_title: null,
+    current_session_seconds: 0,
+    last_seen: now - 3600000 * (2 + Math.floor(Math.random() * 5))
+  });
+
+  const charlotteHistory = new Map<string, GamePlayRecord>();
+  const charlottePlayedPool = [...pool].sort(() => 0.5 - Math.random()).slice(0, Math.min(2, pool.length));
+  charlottePlayedPool.forEach((g, idx) => {
+    const totalSec = Math.floor(400 + Math.random() * 5000);
+    const lastPlayed = new Date(now - (idx * 3600000 * 24 + 3600000 * 3)).toISOString();
+    charlotteHistory.set(g.id, {
+      game_id: g.id,
+      game_title: g.title,
+      game_thumb: g.thumbnail_url || undefined,
+      total_seconds: totalSec,
+      last_played_at: lastPlayed
+    });
+  });
+  playHistoryStore.set('charlotte@g-hub.io', charlotteHistory);
+
+  lastDemoFriendsRefresh = now;
 }
 
-seedDemoFriends();
+// 起動時に実ゲームをもとにデモフレンドを即時初期化
+refreshDemoFriendsFromActualGames();
+// 3分毎にデモフレンドのステータスをランダム更新
+setInterval(refreshDemoFriendsFromActualGames, 180000);
+
+// ゲーム保存 & バックアップ API (投稿したゲームが見つからない問題を根本防止)
+app.get('/api/games', (req: Request, res: Response) => {
+  const game_id = req.query.id as string;
+  if (game_id) {
+    const game = gamesStore.get(game_id);
+    if (game) return res.json(game);
+    // キャッシュ内からも検索
+    const cached = cachedActualGames.find(g => g.id === game_id);
+    if (cached) return res.json(cached);
+    return res.status(404).json({ error: 'Game not found' });
+  }
+  res.json(Array.from(gamesStore.values()));
+});
+
+app.post('/api/games', (req: Request, res: Response) => {
+  const gameData = req.body;
+  if (!gameData || !gameData.id) return res.status(400).json({ error: 'Missing gameData or id' });
+  
+  gamesStore.set(gameData.id, {
+    ...gameData,
+    created_at: gameData.created_at || new Date().toISOString()
+  });
+
+  // キャッシュにも即座に追加
+  if (!cachedActualGames.some(g => g.id === gameData.id)) {
+    cachedActualGames.unshift(gameData);
+  }
+
+  // デモフレンドにもこの新規ゲームを反映
+  refreshDemoFriendsFromActualGames();
+
+  res.json({ success: true, game: gameData });
+});
+
+// ゲームファイルペイロード保存 (Supabase Storage障害時の確実なフォールバック)
+app.post('/api/games/payload', (req: Request, res: Response) => {
+  const { game_id, filename, contentType, base64Data, textData } = req.body;
+  if (!game_id) return res.status(400).json({ error: 'Missing game_id' });
+
+  let buffer: Buffer;
+  if (base64Data) {
+    buffer = Buffer.from(base64Data, 'base64');
+  } else if (textData) {
+    buffer = Buffer.from(textData, 'utf-8');
+  } else {
+    return res.status(400).json({ error: 'Missing data' });
+  }
+
+  payloadsStore.set(game_id, {
+    filename: filename || 'index.html',
+    contentType: contentType || (filename?.endsWith('.zip') ? 'application/zip' : 'text/html'),
+    buffer
+  });
+
+  const entry_url = `/api/games/payload/${encodeURIComponent(game_id)}`;
+  res.json({ success: true, entry_url });
+});
+
+app.get('/api/games/payload/:id', (req: Request, res: Response) => {
+  const id = req.params.id;
+  const payload = payloadsStore.get(id);
+  if (!payload) return res.status(404).send('Game file not found');
+  res.setHeader('Content-Type', payload.contentType);
+  res.send(payload.buffer);
+});
 
 // フレンド管理 API
 app.get('/api/friends', (req: Request, res: Response) => {
@@ -331,6 +484,30 @@ app.get('/api/presence', (req: Request, res: Response) => {
   }
 
   res.json(results);
+});
+
+// 体験版プレイ制限時間（設定・取得API）
+const trialsStore = new Map<string, number>();
+
+app.get('/api/game-trials', (req: Request, res: Response) => {
+  const game_id = req.query.game_id as string;
+  if (game_id) {
+    const minutes = trialsStore.get(game_id) || 0;
+    return res.json({ game_id, trial_minutes: minutes });
+  }
+  const result: Record<string, number> = {};
+  for (const [gid, min] of trialsStore.entries()) {
+    result[gid] = min;
+  }
+  res.json(result);
+});
+
+app.post('/api/game-trials', (req: Request, res: Response) => {
+  const { game_id, trial_minutes } = req.body;
+  if (!game_id) return res.status(400).json({ error: 'Missing game_id' });
+  const min = Number(trial_minutes) || 0;
+  trialsStore.set(game_id, min);
+  res.json({ success: true, game_id, trial_minutes: min });
 });
 
 // 3. G-AI (Qwen 2.5 Coder) 二重化エンドポイント

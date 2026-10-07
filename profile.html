@@ -167,8 +167,36 @@
         document.getElementById('edit-bio').value = prof.bio || '';
       }
 
-      // 投稿ゲーム取得
-      const { data: games } = await supabase.from('games').select('*').eq('author_email', user.email).order('created_at', { ascending: false });
+      // 投稿ゲーム取得（Supabase ＆ サーバーAPI ＆ ローカルストレージ統合）
+      let games = [];
+      try {
+        const { data: supaGames } = await supabase.from('games').select('*').eq('author_email', user.email).order('created_at', { ascending: false });
+        if (supaGames) games = supaGames;
+      } catch (e) {}
+
+      try {
+        const sRes = await fetch('/api/games');
+        if (sRes.ok) {
+          const allSrv = await sRes.json();
+          if (Array.isArray(allSrv)) {
+            allSrv.filter(g => g.author_email === user.email).forEach(sg => {
+              const existingIdx = games.findIndex(x => x.id === sg.id);
+              if (existingIdx >= 0) games[existingIdx] = { ...games[existingIdx], ...sg };
+              else games.push(sg);
+            });
+          }
+        }
+      } catch (e) {}
+
+      try {
+        const localGames = JSON.parse(localStorage.getItem('ghub_local_games') || '[]');
+        localGames.filter(g => g.author_email === user.email).forEach(lg => {
+          const existingIdx = games.findIndex(x => x.id === lg.id);
+          if (existingIdx >= 0) games[existingIdx] = { ...games[existingIdx], ...lg };
+          else games.push(lg);
+        });
+      } catch (e) {}
+
       const gamesList = document.getElementById('my-games-list');
       document.getElementById('stat-games').innerText = `${games?.length || 0} 本`;
 

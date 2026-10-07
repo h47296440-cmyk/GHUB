@@ -557,8 +557,32 @@
 
     async function loadAndRunGame() {
       if (!gameId) return;
-      const { data: game, error } = await supabase.from('games').select('*').eq('id', gameId).single();
-      if (error || !game) return alert('ゲームが見つかりませんでした');
+      let game = null;
+      try {
+        const { data, error } = await supabase.from('games').select('*').eq('id', gameId).single();
+        if (!error && data) game = data;
+      } catch (e) {}
+
+      // Supabaseに無い場合、サーバーAPI (/api/games) から取得
+      if (!game) {
+        try {
+          const res = await fetch(`/api/games?id=${encodeURIComponent(gameId)}`);
+          if (res.ok) {
+            const serverGame = await res.json();
+            if (serverGame && serverGame.id) game = serverGame;
+          }
+        } catch (e) {}
+      }
+
+      // それでも無い場合、ローカルストレージから取得
+      if (!game) {
+        try {
+          const localGames = JSON.parse(localStorage.getItem('ghub_local_games') || '[]');
+          game = localGames.find(g => g.id === gameId);
+        } catch (e) {}
+      }
+
+      if (!game) return alert('ゲームが見つかりませんでした');
       currentGame = game;
 
       recordRecentPlay(gameId);
@@ -595,7 +619,20 @@
         document.getElementById('review-user-name').value = prof?.username || user.email.split('@')[0];
       }
 
-      const trialMin = Number(game.trial_duration_minutes) || 0;
+      let trialMin = Number(game.trial_duration_minutes) || 0;
+      if (trialMin <= 0) {
+        const locTrial = parseInt(localStorage.getItem(`ghub_trial_${gameId}`) || '0');
+        if (locTrial > 0) trialMin = locTrial;
+        else {
+          try {
+            const tRes = await fetch(`/api/game-trials?game_id=${encodeURIComponent(gameId)}`);
+            if (tRes.ok) {
+              const tData = await tRes.json();
+              if (tData && tData.trial_minutes) trialMin = Number(tData.trial_minutes);
+            }
+          } catch (e) {}
+        }
+      }
       let isPurchased = false;
       if (user) {
         if (user.email === game.author_email) isPurchased = true;
@@ -1344,18 +1381,6 @@
       try {
         const doc = iframe.contentDocument || iframe.contentWindow.document;
         const win = iframe.contentWindow || window;
-        const canvasEls = doc.querySelectorAll('canvas');
-        let sourceCanvas = null;
-        if (canvasEls.length > 0) {
-          let maxArea = 0;
-          canvasEls.forEach(c => {
-            const area = (c.width || c.clientWidth || 0) * (c.height || c.clientHeight || 0);
-            if (area > maxArea) {
-              maxArea = area;
-              sourceCanvas = c;
-            }
-          });
-        }
 
         const targetW = 640;
         const targetH = 360;
@@ -1366,40 +1391,102 @@
         ctx.fillStyle = '#0b0f19';
         ctx.fillRect(0, 0, targetW, targetH);
 
-        if (sourceCanvas && sourceCanvas.width > 0 && sourceCanvas.height > 0) {
-          const sw = sourceCanvas.width;
-          const sh = sourceCanvas.height;
+        // 1. iframe内の全Canvas要素を収集＆スナップショット
+        const canvasEls = Array.from(doc.querySelectorAll('canvas'));
+        const canvasSnapshots = [];
+        for (const c of canvasEls) {
+          if (c.width > 0 && c.height > 0) {
+            try {
+              const tempC = document.createElement('canvas');
+              tempC.width = c.width;
+              tempC.height = c.height;
+              const tCtx = tempC.getContext('2d');
+              tCtx.drawImage(c, 0, 0);
+              canvasSnapshots.push({ original: c, snapshot: tempC });
+            } catch (e) {
+              canvasSnapshots.push({ original: c, snapshot: c });
+            }
+          }
+        }
+
+        // 2. メインゲームCanvasを描画
+        if (canvasSnapshots.length > 0) {
+          const mainSnap = canvasSnapshots.reduce((prev, curr) => {
+            const pArea = prev.snapshot.width * prev.snapshot.height;
+            const cArea = curr.snapshot.width * curr.snapshot.height;
+            return cArea > pArea ? curr : prev;
+          }, canvasSnapshots[0]);
+
+          const sw = mainSnap.snapshot.width;
+          const sh = mainSnap.snapshot.height;
           const scale = Math.max(targetW / sw, targetH / sh);
           const dw = sw * scale;
           const dh = sh * scale;
           const dx = (targetW - dw) / 2;
           const dy = (targetH - dh) / 2;
-          ctx.drawImage(sourceCanvas, dx, dy, dw, dh);
-        } else {
+          try {
+            ctx.drawImage(mainSnap.snapshot, dx, dy, dw, dh);
+          } catch (e) {}
+        }
+
+        // 3. html2canvasで全DOM UI（ボタン・HUD・スコア等）を透明背景で重ねて描画
+        try {
           const rootEl = doc.body || doc.documentElement;
           const renderedCanvas = await html2canvas(rootEl, {
             useCORS: true,
-            allowTaint: true,
+            allowTaint: false,
             logging: false,
-            windowWidth: doc.documentElement.clientWidth || win.innerWidth || 800,
-            windowHeight: doc.documentElement.clientHeight || win.innerHeight || 600
+            backgroundColor: null,
+            windowWidth: win.innerWidth || doc.documentElement.clientWidth || 800,
+            windowHeight: win.innerHeight || doc.documentElement.clientHeight || 600,
+            onclone: (clonedDoc) => {
+              const clonedCanvases = Array.from(clonedDoc.querySelectorAll('canvas'));
+              canvasSnapshots.forEach((snap, idx) => {
+                const targetCloned = clonedCanvases[idx];
+                if (targetCloned && snap.snapshot) {
+                  try {
+                    const cCtx = targetCloned.getContext('2d');
+                    if (cCtx) cCtx.drawImage(snap.snapshot, 0, 0);
+                  } catch (e) {}
+                }
+              });
+            }
           });
-          const sw = renderedCanvas.width;
-          const sh = renderedCanvas.height;
-          const scale = Math.max(targetW / sw, targetH / sh);
-          const dw = sw * scale;
-          const dh = sh * scale;
-          const dx = (targetW - dw) / 2;
-          const dy = (targetH - dh) / 2;
-          ctx.drawImage(renderedCanvas, dx, dy, dw, dh);
+
+          if (renderedCanvas && renderedCanvas.width > 0 && renderedCanvas.height > 0) {
+            const sw = renderedCanvas.width;
+            const sh = renderedCanvas.height;
+            const scale = Math.max(targetW / sw, targetH / sh);
+            const dw = sw * scale;
+            const dh = sh * scale;
+            const dx = (targetW - dw) / 2;
+            const dy = (targetH - dh) / 2;
+            ctx.drawImage(renderedCanvas, dx, dy, dw, dh);
+          }
+        } catch (uiErr) {
+          console.warn("DOM UI capture fallback:", uiErr);
         }
 
-        outCanvas.toBlob(blob => {
+        const finishEditBlob = (blob) => {
           newThumbnailBlob = blob;
           const url = URL.createObjectURL(blob);
           document.getElementById('edit-thumb-preview').innerHTML = `<img src="${url}" class="w-full h-full object-cover object-center block">`;
-          alert('📸 プレイ画面からサムネイルをキャプチャしました！');
-        }, 'image/jpeg', 0.9);
+          alert('📸 プレイ画面（ゲーム画面 ＆ 全UI合成）からサムネイルをキャプチャしました！');
+        };
+
+        try {
+          outCanvas.toBlob(blob => {
+            if (blob) finishEditBlob(blob);
+            else throw new Error("toBlob returned null");
+          }, 'image/jpeg', 0.9);
+        } catch (secErr) {
+          const dataUrl = outCanvas.toDataURL('image/jpeg', 0.9);
+          const byteString = atob(dataUrl.split(',')[1]);
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+          finishEditBlob(new Blob([ab], { type: 'image/jpeg' }));
+        }
       } catch (err) {
         alert('キャプチャ失敗: ' + err.message);
       }
@@ -1461,11 +1548,10 @@
       saveBtn.innerText = '保存＆アップロード中...';
 
       try {
-        const updateData = {
+        const supaUpdateData = {
           title,
           tag,
           price_coins: price,
-          trial_duration_minutes: trialMinutes,
           description: desc
         };
 
@@ -1477,7 +1563,7 @@
             upsert: true
           });
           const newThumbUrl = supabase.storage.from('games').getPublicUrl(thumbPath).data.publicUrl;
-          updateData.thumbnail_url = `${newThumbUrl}?t=${Date.now()}`;
+          supaUpdateData.thumbnail_url = `${newThumbUrl}?t=${Date.now()}`;
         }
 
         // ゲームファイルの更新があればアップロード
@@ -1488,11 +1574,45 @@
             upsert: true
           });
           const newEntryUrl = supabase.storage.from('games').getPublicUrl(`${gameId}/${filename}`).data.publicUrl;
-          updateData.entry_url = `${newEntryUrl}?t=${Date.now()}`;
+          supaUpdateData.entry_url = `${newEntryUrl}?t=${Date.now()}`;
         }
 
         // games テーブルの更新
-        await supabase.from('games').update(updateData).eq('id', gameId);
+        try {
+          await supabase.from('games').update(supaUpdateData).eq('id', gameId);
+        } catch (e) {}
+
+        // 体験版時間の保存
+        try {
+          await fetch('/api/game-trials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game_id: gameId, trial_minutes: trialMinutes })
+          });
+        } catch (e) {}
+        localStorage.setItem(`ghub_trial_${gameId}`, String(trialMinutes));
+
+        // サーバー側 /api/games と localStorage の更新
+        const fullUpdatedGame = {
+          ...(currentGame || {}),
+          ...supaUpdateData,
+          trial_duration_minutes: trialMinutes
+        };
+        try {
+          await fetch('/api/games', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fullUpdatedGame)
+          });
+        } catch (e) {}
+
+        try {
+          const localGames = JSON.parse(localStorage.getItem('ghub_local_games') || '[]');
+          const idx = localGames.findIndex(g => g.id === gameId);
+          if (idx >= 0) localGames[idx] = fullUpdatedGame;
+          else localGames.unshift(fullUpdatedGame);
+          localStorage.setItem('ghub_local_games', JSON.stringify(localGames));
+        } catch (e) {}
 
         // アップデート内容の記録（changelogが入力されている場合）
         if (changelog) {

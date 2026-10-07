@@ -336,13 +336,56 @@
     };
     initTheme();
 
-    // --- 高速・ノンブロッキング ゲーム読み込み ---
+    let gameTrialsMap = {};
+
+    // --- 高速・ノンブロッキング ゲーム読み込み（マルチレイヤー対応） ---
     async function loadGames() {
       try {
         loadLocalReviewCache();
 
-        const { data, error } = await client.from('games').select('*').order(currentSort, { ascending: false });
-        allGames = data || [];
+        // 1. Supabaseから取得
+        let games = [];
+        try {
+          const { data, error } = await client.from('games').select('*').order(currentSort, { ascending: false });
+          if (!error && data) games = data;
+        } catch (e) {}
+
+        // 2. サーバーAPI (/api/games) とマージ
+        try {
+          const sRes = await fetch('/api/games');
+          if (sRes.ok) {
+            const serverGames = await sRes.json();
+            if (Array.isArray(serverGames)) {
+              serverGames.forEach(sg => {
+                const existingIdx = games.findIndex(g => g.id === sg.id);
+                if (existingIdx >= 0) games[existingIdx] = { ...games[existingIdx], ...sg };
+                else games.push(sg);
+              });
+            }
+          }
+        } catch (e) {}
+
+        // 3. ローカルストレージ (ghub_local_games) とマージ
+        try {
+          const localGames = JSON.parse(localStorage.getItem('ghub_local_games') || '[]');
+          if (Array.isArray(localGames)) {
+            localGames.forEach(lg => {
+              const existingIdx = games.findIndex(g => g.id === lg.id);
+              if (existingIdx >= 0) games[existingIdx] = { ...games[existingIdx], ...lg };
+              else games.unshift(lg);
+            });
+          }
+        } catch (e) {}
+
+        // 4. 体験版マップ (/api/game-trials) を取得
+        try {
+          const tRes = await fetch('/api/game-trials');
+          if (tRes.ok) {
+            gameTrialsMap = await tRes.json();
+          }
+        } catch (e) {}
+
+        allGames = games;
 
         renderGames();
         fetchReviewsSummaryAsync();
@@ -545,7 +588,10 @@
                 <span class="${(g.price_coins || 0) > 0 ? 'bg-amber-500 text-white' : 'bg-emerald-600 text-white'} text-[9px] font-bold px-2 py-0.5 rounded shadow-sm">
                   ${(g.price_coins || 0) > 0 ? `${g.price_coins} G` : 'FREE'}
                 </span>
-                ${(g.trial_duration_minutes || 0) > 0 ? `<span class="bg-amber-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm">⏳ 体験版(${g.trial_duration_minutes}分)</span>` : ''}
+                ${(() => {
+                  const tM = g.trial_duration_minutes || gameTrialsMap[g.id] || parseInt(localStorage.getItem('ghub_trial_' + g.id) || '0') || 0;
+                  return tM > 0 ? `<span class="bg-amber-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm">⏳ 体験版(${tM}分)</span>` : '';
+                })()}
                 <span class="bg-slate-900/60 dark:bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded backdrop-blur-sm">
                   ${plats}
                 </span>

@@ -173,24 +173,11 @@
 
     window.captureThumbnail = async () => {
       if (!iframe.contentDocument && !iframe.contentWindow) return alert("ゲーム画面が読み込まれていません！");
-      log("📸 サムネイルをキャプチャ中（中央配置・高精度処理）...");
+      log("📸 サムネイルをキャプチャ中（全UI・HUD・キャンバス高精度合成）...");
 
       try {
         const doc = iframe.contentDocument || iframe.contentWindow.document;
         const win = iframe.contentWindow || window;
-
-        const canvasEls = doc.querySelectorAll('canvas');
-        let sourceCanvas = null;
-        if (canvasEls.length > 0) {
-          let maxArea = 0;
-          canvasEls.forEach(c => {
-            const area = (c.width || c.clientWidth || 0) * (c.height || c.clientHeight || 0);
-            if (area > maxArea) {
-              maxArea = area;
-              sourceCanvas = c;
-            }
-          });
-        }
 
         const targetW = 640;
         const targetH = 360;
@@ -201,40 +188,113 @@
         ctx.fillStyle = '#0b0f19';
         ctx.fillRect(0, 0, targetW, targetH);
 
-        if (sourceCanvas && sourceCanvas.width > 0 && sourceCanvas.height > 0) {
-          const sw = sourceCanvas.width;
-          const sh = sourceCanvas.height;
+        // 1. iframe内の全Canvas要素を収集
+        const canvasEls = Array.from(doc.querySelectorAll('canvas'));
+
+        // 2. キャンバス描画内容を事前バックアップ（WebGL/2D両対応）
+        const canvasSnapshots = [];
+        for (const c of canvasEls) {
+          if (c.width > 0 && c.height > 0) {
+            try {
+              const tempC = document.createElement('canvas');
+              tempC.width = c.width;
+              tempC.height = c.height;
+              const tCtx = tempC.getContext('2d');
+              tCtx.drawImage(c, 0, 0);
+              canvasSnapshots.push({ original: c, snapshot: tempC, rect: c.getBoundingClientRect() });
+            } catch (e) {
+              canvasSnapshots.push({ original: c, snapshot: c, rect: c.getBoundingClientRect() });
+            }
+          }
+        }
+
+        // 3. 背景としてメインゲームCanvasを描画
+        if (canvasSnapshots.length > 0) {
+          // 最も面積の大きいキャンバスをメインとする
+          const mainSnap = canvasSnapshots.reduce((prev, curr) => {
+            const pArea = prev.snapshot.width * prev.snapshot.height;
+            const cArea = curr.snapshot.width * curr.snapshot.height;
+            return cArea > pArea ? curr : prev;
+          }, canvasSnapshots[0]);
+
+          const sw = mainSnap.snapshot.width;
+          const sh = mainSnap.snapshot.height;
           const scale = Math.max(targetW / sw, targetH / sh);
           const dw = sw * scale;
           const dh = sh * scale;
           const dx = (targetW - dw) / 2;
           const dy = (targetH - dh) / 2;
-          ctx.drawImage(sourceCanvas, dx, dy, dw, dh);
-        } else {
+          try {
+            ctx.drawImage(mainSnap.snapshot, dx, dy, dw, dh);
+          } catch (e) {}
+        }
+
+        // 4. html2canvasでDOM（HTML UI、ボタン、HUD、スコア表示、テキスト、Reactオーバーレイ）を高精度キャプチャして合成
+        let uiCaptured = false;
+        try {
           const rootEl = doc.body || doc.documentElement;
           const renderedCanvas = await html2canvas(rootEl, {
             useCORS: true,
-            allowTaint: true,
+            allowTaint: false,
             logging: false,
-            windowWidth: doc.documentElement.clientWidth || win.innerWidth || 800,
-            windowHeight: doc.documentElement.clientHeight || win.innerHeight || 600
+            backgroundColor: null, // 透明背景にしてUIのみをCanvasの上に重ねる
+            windowWidth: win.innerWidth || doc.documentElement.clientWidth || 800,
+            windowHeight: win.innerHeight || doc.documentElement.clientHeight || 600,
+            onclone: (clonedDoc) => {
+              // クローン先のcanvas要素に元の描画内容を確実に復元
+              const clonedCanvases = Array.from(clonedDoc.querySelectorAll('canvas'));
+              canvasSnapshots.forEach((snap, idx) => {
+                const targetCloned = clonedCanvases[idx];
+                if (targetCloned && snap.snapshot) {
+                  try {
+                    const cCtx = targetCloned.getContext('2d');
+                    if (cCtx) {
+                      cCtx.drawImage(snap.snapshot, 0, 0);
+                    }
+                  } catch (e) {}
+                }
+              });
+            }
           });
-          const sw = renderedCanvas.width;
-          const sh = renderedCanvas.height;
-          const scale = Math.max(targetW / sw, targetH / sh);
-          const dw = sw * scale;
-          const dh = sh * scale;
-          const dx = (targetW - dw) / 2;
-          const dy = (targetH - dh) / 2;
-          ctx.drawImage(renderedCanvas, dx, dy, dw, dh);
+
+          if (renderedCanvas && renderedCanvas.width > 0 && renderedCanvas.height > 0) {
+            const sw = renderedCanvas.width;
+            const sh = renderedCanvas.height;
+            const scale = Math.max(targetW / sw, targetH / sh);
+            const dw = sw * scale;
+            const dh = sh * scale;
+            const dx = (targetW - dw) / 2;
+            const dy = (targetH - dh) / 2;
+            ctx.drawImage(renderedCanvas, dx, dy, dw, dh);
+            uiCaptured = true;
+          }
+        } catch (uiErr) {
+          console.warn("DOM UI capture fallback:", uiErr);
         }
 
-        outCanvas.toBlob(blob => {
+        // 5. Blob生成（SecurityError対策付き）
+        const finishBlob = (blob) => {
           capturedThumbnailBlob = blob;
           const url = URL.createObjectURL(blob);
           document.getElementById('thumb-preview').innerHTML = `<img src="${url}" class="w-full h-full object-cover object-center block" style="object-position: center center;">`;
-          log("✅ サムネイルの中央撮影が完了しました！");
-        }, 'image/jpeg', 0.9);
+          log(uiCaptured ? "✅ サムネイル（ゲーム画面 ＆ 全UI合成）の撮影が完了しました！" : "✅ サムネイルの撮影が完了しました！");
+        };
+
+        try {
+          outCanvas.toBlob(blob => {
+            if (blob) finishBlob(blob);
+            else throw new Error("toBlob returned null");
+          }, 'image/jpeg', 0.9);
+        } catch (secErr) {
+          // フォールバック: データURL経由でBlob化
+          const dataUrl = outCanvas.toDataURL('image/jpeg', 0.9);
+          const byteString = atob(dataUrl.split(',')[1]);
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+          const fallbackBlob = new Blob([ab], { type: 'image/jpeg' });
+          finishBlob(fallbackBlob);
+        }
       } catch (err) {
         log("❌ キャプチャ失敗: " + err.message);
       }
@@ -581,7 +641,7 @@
           thumbnailUrl = supabase.storage.from('games').getPublicUrl(thumbPath).data.publicUrl;
         }
 
-        await supabase.from('games').insert({
+        const supaRecord = {
           id: gameId,
           title,
           tag,
@@ -591,10 +651,48 @@
           author_email: user.email,
           platforms: 'pc',
           price_coins: price,
-          trial_duration_minutes: trialMinutes,
           likes_count: 0,
           play_count: 0
-        });
+        };
+
+        const { error: insErr } = await supabase.from('games').insert(supaRecord);
+        if (insErr) {
+          console.warn('Supabase insert warning:', insErr);
+        }
+
+        const fullGameRecord = {
+          ...supaRecord,
+          trial_duration_minutes: trialMinutes,
+          created_at: new Date().toISOString()
+        };
+
+        // 1. サーバーAPI (/api/games) に確実に保存して共有
+        try {
+          await fetch('/api/games', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(fullGameRecord)
+          });
+        } catch (e) {}
+
+        // 2. 体験版設定をサーバー＆ローカルに記録
+        if (trialMinutes > 0) {
+          try {
+            await fetch('/api/game-trials', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ game_id: gameId, trial_minutes: trialMinutes })
+            });
+          } catch (e) {}
+          localStorage.setItem(`ghub_trial_${gameId}`, String(trialMinutes));
+        }
+
+        // 3. ローカルストレージにバックアップ
+        try {
+          const localGames = JSON.parse(localStorage.getItem('ghub_local_games') || '[]');
+          localGames.unshift(fullGameRecord);
+          localStorage.setItem('ghub_local_games', JSON.stringify(localGames));
+        } catch (e) {}
 
         log('🎉 公開完了！');
         alert('ゲームを公開しました！');
