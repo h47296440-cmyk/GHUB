@@ -2,6 +2,12 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0b0f19">
+  <link rel="manifest" href="/manifest.json">
   <title>ゲーム公開 - G-HUB</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
@@ -9,6 +15,17 @@
   <script src="https://cdn.jsdelivr.net/npm/esbuild-wasm@0.19.11/lib/browser.min.js"></script>
   <!-- 画面キャプチャ用ライブラリ -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script>
+    if (('standalone' in window.navigator) && window.navigator.standalone) {
+      document.addEventListener('click', function(e) {
+        let target = e.target.closest('a');
+        if (target && target.href && target.href.startsWith(window.location.origin) && !target.target && !target.hasAttribute('download')) {
+          e.preventDefault();
+          window.location.assign(target.href);
+        }
+      }, false);
+    }
+  </script>
 </head>
 <body class="bg-[#1e1e1e] text-white min-h-screen p-4 flex justify-center items-center font-sans">
   <div class="max-w-6xl w-full bg-[#252526] p-6 rounded-2xl border border-[#333] shadow-2xl flex flex-col gap-4">
@@ -441,8 +458,14 @@
         scriptEl.type = 'module';
 
         if (isNextApp) {
-          const blob = new Blob([bundledJs], { type: 'application/javascript' });
-          const blobUrl = URL.createObjectURL(blob);
+          // 🌟 一時的な blob URL ではなく、永続的に自己完結する Base64 Data URL を使用（Blob消失エラーを完全撲滅！）
+          const bytes = new TextEncoder().encode(bundledJs);
+          let binary = '';
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          const base64Js = btoa(binary);
+          const dataUrl = `data:text/javascript;base64,${base64Js}`;
 
           scriptEl.textContent = `
             import React, { Suspense } from 'https://esm.sh/react@18.2.0?dev';
@@ -452,7 +475,7 @@
 
             async function render() {
               try {
-                const mod = await import('${blobUrl}');
+                const mod = await import('${dataUrl}');
                 const Component = mod.default || mod[Object.keys(mod)[0]];
                 
                 const rootEl = document.getElementById('root');

@@ -65,6 +65,35 @@ app.post('/api/reviews', (req, res) => {
   res.json({ success: true, review: newReview });
 });
 
+// ゲームアップデート履歴保存用インメモリキャッシュ
+const updatesStore = new Map();
+
+app.get('/api/game-updates', (req, res) => {
+  const { game_id } = req.query;
+  if (!game_id) return res.json([]);
+  const list = updatesStore.get(game_id) || [];
+  res.json(list);
+});
+
+app.post('/api/game-updates', (req, res) => {
+  const { game_id, version_title, changelog, author_email } = req.body;
+  if (!game_id || !changelog) {
+    return res.status(400).json({ error: 'Missing game_id or changelog' });
+  }
+  const list = updatesStore.get(game_id) || [];
+  const newUpdate = {
+    id: 'upd_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+    game_id,
+    version_title: version_title || 'バージョン更新',
+    changelog,
+    updated_at: new Date().toISOString(),
+    author_email: author_email || ''
+  };
+  list.unshift(newUpdate);
+  updatesStore.set(game_id, list);
+  res.json({ success: true, update: newUpdate });
+});
+
 // 3. G-AI (Qwen 2.5 Coder) 二重化エンドポイント
 app.post('/ai', async (req, res) => {
   const { systemPrompt, userPrompt, maxTokens = 1500 } = req.body;

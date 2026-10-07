@@ -3,12 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <title>プレイ - G-HUB</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0b0f19">
+  <link rel="manifest" href="/manifest.json">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/esbuild-wasm@0.19.11/lib/browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
+    /* PWA iOS セーフエリア最適化 */
+    body {
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
     /* 擬似全画面（iOS / Safari 等のフルスクリーン非対応環境用） */
     .pseudo-fullscreen {
       position: fixed !important;
@@ -25,9 +36,10 @@
       border-radius: 0 !important;
       border: none !important;
       background: #000 !important;
+      padding-top: env(safe-area-inset-top, 0px);
     }
     .pseudo-fullscreen #preview-iframe {
-      height: calc(100vh - 40px) !important;
+      height: calc(100vh - 40px - env(safe-area-inset-top, 0px)) !important;
     }
   </style>
 </head>
@@ -36,10 +48,17 @@
     
     <!-- ヘッダー -->
     <div class="flex justify-between items-center mb-3 pb-3 border-b border-[#333]">
-      <a href="index.html" class="text-indigo-400 hover:underline font-bold text-xs">← トップ一覧へ戻る</a>
+      <a href="index.html" class="text-indigo-400 hover:underline font-bold text-xs flex items-center gap-1">
+        <span>←</span> トップ一覧へ戻る
+      </a>
       
       <div id="author-controls" class="hidden flex items-center gap-2">
-        <button onclick="deleteGame()" class="bg-rose-600 hover:bg-rose-500 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition">🗑️ 削除</button>
+        <button onclick="openEditModal()" class="bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition flex items-center gap-1 shadow">
+          ✏️ ゲーム編集 / アップデート
+        </button>
+        <button onclick="deleteGame()" class="bg-rose-600 hover:bg-rose-500 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition">
+          🗑️ 削除
+        </button>
       </div>
 
       <div class="flex items-center gap-2">
@@ -121,6 +140,19 @@
           </div>
         </div>
 
+        <!-- 📢 アップデート履歴セクション -->
+        <div class="mt-4 bg-[#252526] p-4 rounded-xl border border-[#333] text-xs">
+          <div class="flex justify-between items-center border-b border-[#333] pb-2 mb-3">
+            <h2 class="font-bold text-indigo-400 flex items-center gap-1.5 text-sm">
+              📢 アップデート履歴
+            </h2>
+            <span id="update-count-badge" class="text-slate-400 font-mono text-[11px]">0 件の更新</span>
+          </div>
+          <div id="updates-list" class="space-y-2.5 max-h-52 overflow-y-auto pr-1">
+            <p class="text-slate-500 text-center py-3">アップデート履歴はありません。</p>
+          </div>
+        </div>
+
         <!-- ⭐ レビュー・評価セクション -->
         <div class="mt-4 bg-[#252526] p-5 rounded-xl border border-[#333] text-xs">
           <div class="flex flex-wrap justify-between items-center border-b border-[#333] pb-3 mb-4">
@@ -190,6 +222,100 @@
     </div>
   </div>
 
+  <!-- ✏️ ゲーム編集 / アップデート モーダル -->
+  <div id="edit-game-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-[#252526] border border-[#444] p-6 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl text-xs space-y-4">
+      <div class="flex justify-between items-center border-b border-[#333] pb-3">
+        <h2 class="text-base font-black text-white flex items-center gap-1.5">
+          ✏️ ゲーム編集 & アップデート公開
+        </h2>
+        <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-200 text-sm">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block font-bold mb-1 text-slate-300">タイトル名</label>
+          <input type="text" id="edit-game-title" class="w-full bg-[#1e1e1e] border border-[#444] p-2.5 rounded-lg text-white outline-none focus:border-indigo-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold mb-1 text-slate-300">ジャンル</label>
+            <select id="edit-game-tag" class="w-full bg-[#1e1e1e] border border-[#444] p-2.5 rounded-lg text-white outline-none">
+              <option value="Action">アクション</option>
+              <option value="Puzzle">パズル</option>
+              <option value="RPG">RPG</option>
+              <option value="Horror">ホラー</option>
+              <option value="Other">その他</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold mb-1 text-slate-300">価格</label>
+            <select id="edit-game-price" class="w-full bg-[#1e1e1e] border border-[#444] p-2.5 rounded-lg text-white outline-none">
+              <option value="0">無料 (Free)</option>
+              <option value="30">30 G</option>
+              <option value="50">50 G</option>
+              <option value="100">100 G</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold mb-1 text-slate-300">説明文</label>
+          <textarea id="edit-game-desc" rows="3" class="w-full bg-[#1e1e1e] border border-[#444] p-2.5 rounded-lg text-white outline-none focus:border-indigo-500"></textarea>
+        </div>
+
+        <!-- タイトル画像（サムネイル）変更 -->
+        <div class="bg-[#1e1e1e] p-3 rounded-xl border border-[#333] space-y-2">
+          <label class="block font-bold text-slate-300">タイトル画像（サムネイル）</label>
+          <div class="flex items-center gap-3">
+            <div id="edit-thumb-preview" class="w-20 h-14 bg-slate-900 border border-[#444] rounded-lg overflow-hidden flex items-center justify-center shrink-0">
+              <span class="text-slate-500 text-[10px]">現在の画像</span>
+            </div>
+            <div class="flex-1 space-y-1.5">
+              <label class="inline-block cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-1.5 rounded-lg border border-slate-700 font-bold transition">
+                🖼️ 新しい画像を選択
+                <input type="file" id="edit-thumb-file" accept="image/*" class="hidden" onchange="handleEditThumbFile(event)">
+              </label>
+              <button type="button" onclick="captureEditThumbFromIframe()" class="block bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 text-xs px-3 py-1.5 rounded-lg border border-amber-500/40 font-bold transition">
+                📸 現在のプレイ画面から撮影
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ゲームファイルのアップデート再アップロード -->
+        <div class="bg-[#1e1e1e] p-3 rounded-xl border border-[#333] space-y-2">
+          <label class="block font-bold text-slate-300">ゲームファイル更新 (.zip または .html)</label>
+          <p class="text-[10px] text-slate-400">ファイルを差し替える場合のみ選択してください（省略時は既存ファイルが維持されます）</p>
+          <input type="file" id="edit-game-file" accept=".zip,.html" class="w-full text-xs text-slate-300 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer">
+          <div id="edit-file-status" class="text-[10px] text-slate-400 font-mono"></div>
+        </div>
+
+        <!-- 📢 アップデート内容（変更履歴メモ）入力 -->
+        <div class="bg-indigo-950/30 p-3 rounded-xl border border-indigo-500/30 space-y-2">
+          <div class="flex justify-between items-center">
+            <label class="font-bold text-indigo-300">📢 アップデート情報（更新履歴に掲載されます）</label>
+            <span class="text-[10px] text-indigo-400 font-mono">Version / Changelog</span>
+          </div>
+          <div>
+            <input type="text" id="edit-version-title" placeholder="バージョン名 (例: v1.1 または 大型アップデート)" class="w-full bg-[#1e1e1e] border border-[#444] p-2 rounded-lg text-white text-xs outline-none focus:border-indigo-500 mb-2">
+            <textarea id="edit-changelog" rows="2" placeholder="アップデート内容・変更点を入力 (例: 新ステージを追加、バグ修正など)" class="w-full bg-[#1e1e1e] border border-[#444] p-2 rounded-lg text-white text-xs outline-none focus:border-indigo-500"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-2 flex gap-2">
+        <button type="button" onclick="saveGameUpdates()" id="save-update-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-black py-2.5 rounded-xl text-xs transition shadow-md">
+          🚀 アップデートを保存・公開する
+        </button>
+        <button type="button" onclick="closeEditModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-2.5 rounded-xl text-xs transition">
+          キャンセル
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const proxyUrl = window.location.origin + '/supabase';
     const supabase = window.supabase.createClient(proxyUrl, 'sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj');
@@ -209,10 +335,24 @@
     let userCoins = 0;
     let currentRating = 5;
     let isPseudoFullscreen = false;
+    let newThumbnailBlob = null;
+    let newGameFilePayload = null;
+    let newPayloadType = 'html';
 
     function log(msg) {
       terminal.innerText += msg + '\n';
       terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    // 📱 iPhone PWA Standalone モードでの内部リンク追従（Safariツールバー出現を防止）
+    if (('standalone' in window.navigator) && window.navigator.standalone) {
+      document.addEventListener('click', function(e) {
+        let target = e.target.closest('a');
+        if (target && target.href && target.href.startsWith(window.location.origin) && !target.target && !target.hasAttribute('download')) {
+          e.preventDefault();
+          window.location.assign(target.href);
+        }
+      }, false);
     }
 
     // 🕒 直近遊んだゲームのローカル記録
@@ -342,7 +482,6 @@
       if (error || !game) return alert('ゲームが見つかりませんでした');
       currentGame = game;
 
-      // 🕒 直近遊んだゲームの履歴に追加
       recordRecentPlay(gameId);
 
       document.getElementById('game-title').innerText = game.title;
@@ -369,7 +508,9 @@
       const { data: { user } } = await supabase.auth.getUser();
       currentUser = user;
       if (user) {
-        if (user.email === game.author_email) document.getElementById('author-controls').classList.remove('hidden');
+        if (user.email === game.author_email) {
+          document.getElementById('author-controls').classList.remove('hidden');
+        }
         const { data: prof } = await supabase.from('profiles').select('*').eq('email', user.email).single();
         if (prof) userCoins = prof.coins || 0;
         document.getElementById('review-user-name').value = prof?.username || user.email.split('@')[0];
@@ -414,9 +555,29 @@
         } else {
           const textData = new TextDecoder('utf-8').decode(uint8);
           if (textData.includes('<!DOCTYPE html>') || textData.includes('<html') || textData.includes('<head>') || textData.includes('<body>') || textData.includes('<script')) {
-            log("⚡ 単一HTMLゲームを検出。展開して実行します...");
-            iframe.srcdoc = textData;
-            log("🚀 ゲーム起動完了！");
+            // 過去の失効したBlob URLが含まれている場合の検出 & 親切なガイド
+            if (textData.includes("import('blob:") || textData.includes('import("blob:')) {
+              log("⚠️ 古いBlob URL形式のデータを検出しました。一時Blobが失効しています。");
+              iframe.srcdoc = `
+                <body style="background:#0b0f19;color:#fff;font-family:sans-serif;padding:32px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;">
+                  <div style="max-width:440px;background:#1e1e1e;border:1px solid #333;border-radius:16px;padding:24px;box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+                    <span style="font-size:36px;display:block;margin-bottom:8px;">⚠️</span>
+                    <h3 style="font-size:15px;font-weight:bold;color:#f59e0b;margin:0 0 8px 0;">一時モジュール（Blob）が期限切れです</h3>
+                    <p style="font-size:11px;color:#94a3b8;line-height:1.6;margin:0 0 16px 0;">
+                      前バージョンのアップローダーで投稿されたため、一時的なBlob URLが失効しています。<br>
+                      作者の方は上部の<strong>「✏️ ゲーム編集 / アップデート」</strong>からファイルを再度選択して保存すると、最新の永続形式（Base64 Data URL）に自動修復され、正常に遊べるようになります！
+                    </p>
+                    <button onclick="window.parent.openEditModal()" style="background:#4f46e5;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:bold;cursor:pointer;">
+                      ✏️ ゲーム編集を開いて再アップロード
+                    </button>
+                  </div>
+                </body>
+              `;
+            } else {
+              log("⚡ 単一HTMLゲームを検出。展開して実行します...");
+              iframe.srcdoc = textData;
+              log("🚀 ゲーム起動完了！");
+            }
           } else {
             log(`⚠️ 取得されたデータがHTML/Zipではありません。\n内容: ${textData.slice(0, 150)}`);
             iframe.srcdoc = `<body style="background:#0b0f19;color:#ff6b6b;font-family:sans-serif;padding:24px;text-align:center;">
@@ -433,9 +594,17 @@
       loadScores();
       loadMessages();
       loadReviews();
+      loadGameUpdates(); // 📢 アップデート履歴読み込み
+
+      if (sessionStorage.getItem('open_edit') === 'true') {
+        sessionStorage.removeItem('open_edit');
+        if (currentUser && currentUser.email === game.author_email) {
+          setTimeout(() => openEditModal(), 300);
+        }
+      }
     }
 
-    // ★★★ 添付ファイル Local Zip Runner v9 準拠の完全堅牢バンドル処理 ★★★
+    // ★★★ v9 完全堅牢バンドル処理 ★★★
     async function processZipArrayBuffer(arrayBuffer) {
       log(`⚡ esbuild でZipを展開・バンドル中...`);
       try {
@@ -614,8 +783,13 @@
         scriptEl.type = 'module';
 
         if (isNextApp) {
-          const blob = new Blob([bundledJs], { type: 'application/javascript' });
-          const blobUrl = URL.createObjectURL(blob);
+          const bytes = new TextEncoder().encode(bundledJs);
+          let binary = '';
+          for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+          }
+          const base64Js = btoa(binary);
+          const dataUrl = `data:text/javascript;base64,${base64Js}`;
 
           scriptEl.textContent = `
             import React, { Suspense } from 'https://esm.sh/react@18.2.0?dev';
@@ -625,7 +799,7 @@
 
             async function render() {
               try {
-                const mod = await import('${blobUrl}');
+                const mod = await import('${dataUrl}');
                 const Component = mod.default || mod[Object.keys(mod)[0]];
                 
                 const rootEl = document.getElementById('root');
@@ -661,6 +835,7 @@
       }
     }
 
+    // 💰 購入処理
     window.buyGame = async () => {
       if (!currentUser) return window.location.href = 'index.html';
       if (userCoins < currentGame.price_coins) return alert(`コイン不足！(所持: ${userCoins} G)`);
@@ -687,6 +862,7 @@
       loadAndRunGame();
     };
 
+    // 🪙 投げ銭処理
     window.sendTip = async (amount = 30) => {
       if (!currentUser) return alert('ログインが必要です！');
       if (userCoins < amount) return alert('コインが足りません！');
@@ -715,12 +891,14 @@
       loadMessages();
     };
 
+    // 削除
     window.deleteGame = async () => {
-      if (!confirm('削除しますか？')) return;
+      if (!confirm('このゲームを削除しますか？（取り消せません）')) return;
       await supabase.from('games').delete().eq('id', gameId);
       window.location.href = 'index.html';
     };
 
+    // いいね
     window.addLike = async () => {
       const { data: g } = await supabase.from('games').select('likes_count').eq('id', gameId).single();
       const next = (g?.likes_count || 0) + 1;
@@ -728,6 +906,7 @@
       document.getElementById('like-count').innerText = next;
     };
 
+    // ランキング
     async function loadScores() {
       const { data: scores } = await supabase.from('leaderboards').select('*').eq('game_id', gameId).order('score', { ascending: false }).limit(10);
       const list = document.getElementById('leaderboard-list');
@@ -749,6 +928,7 @@
       loadScores();
     });
 
+    // チャット
     async function loadMessages() {
       const { data: msgs } = await supabase.from('messages').select('*').eq('game_id', gameId).order('created_at', { ascending: true });
       const container = document.getElementById('chat-messages');
@@ -771,6 +951,7 @@
       loadMessages();
     });
 
+    // ⭐⭐⭐ レビュー & 評価機能 ⭐⭐⭐
     const starButtons = document.querySelectorAll('.star-btn');
     const starLabel = document.getElementById('selected-star-label');
 
@@ -915,6 +1096,287 @@
       alert('⭐ レビューを投稿しました！ありがとうございます。');
       loadReviews();
     });
+
+    // ★★★ 📢 アップデート履歴の読み込み & 表示 ★★★
+    async function loadGameUpdates() {
+      let updates = [];
+
+      // 1. サーバーAPIから取得
+      try {
+        const res = await fetch(`/api/game-updates?game_id=${gameId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.length > 0) updates = data;
+        }
+      } catch (e) {}
+
+      // 2. Supabase game_updates テーブル試行
+      if (updates.length === 0) {
+        try {
+          const { data, error } = await supabase.from('game_updates').select('*').eq('game_id', gameId).order('updated_at', { ascending: false });
+          if (!error && data && data.length > 0) updates = data;
+        } catch (err) {}
+      }
+
+      // 3. localStorage フォールバック
+      if (updates.length === 0) {
+        try {
+          const local = JSON.parse(localStorage.getItem(`ghub_updates_${gameId}`) || '[]');
+          if (local.length > 0) updates = local;
+        } catch (e) {}
+      }
+
+      renderGameUpdates(updates);
+    }
+
+    function renderGameUpdates(updates) {
+      const container = document.getElementById('updates-list');
+      const countBadge = document.getElementById('update-count-badge');
+
+      if (!updates || updates.length === 0) {
+        countBadge.innerText = '0 件の更新';
+        container.innerHTML = '<p class="text-slate-500 text-center py-3">アップデート履歴はありません。</p>';
+        return;
+      }
+
+      countBadge.innerText = `${updates.length} 件の更新`;
+      container.innerHTML = updates.map((u, idx) => {
+        const dateStr = u.updated_at ? new Date(u.updated_at).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+        return `
+          <div class="bg-[#1e1e1e] p-3 rounded-xl border border-[#333] space-y-1">
+            <div class="flex justify-between items-center">
+              <span class="font-bold text-indigo-400 font-mono text-xs flex items-center gap-1.5">
+                <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span> ${u.version_title || 'バージョン更新'}
+              </span>
+              <span class="text-slate-500 font-mono text-[10px]">${dateStr}</span>
+            </div>
+            <p class="text-slate-200 whitespace-pre-wrap leading-relaxed text-xs mt-1 bg-slate-950/40 p-2 rounded-lg border border-slate-900 font-sans">${u.changelog}</p>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ★★★ ✏️ ゲーム編集 / アップデートモーダル制御 ★★★
+    window.openEditModal = () => {
+      if (!currentGame) return;
+      document.getElementById('edit-game-title').value = currentGame.title || '';
+      document.getElementById('edit-game-tag').value = currentGame.tag || 'Action';
+      document.getElementById('edit-game-price').value = currentGame.price_coins || 0;
+      document.getElementById('edit-game-desc').value = currentGame.description || '';
+      document.getElementById('edit-version-title').value = '';
+      document.getElementById('edit-changelog').value = '';
+      document.getElementById('edit-file-status').innerText = '未選択（既存のゲームファイルが維持されます）';
+      newThumbnailBlob = null;
+      newGameFilePayload = null;
+
+      if (currentGame.thumbnail_url) {
+        document.getElementById('edit-thumb-preview').innerHTML = `<img src="${currentGame.thumbnail_url}" class="w-full h-full object-cover object-center block">`;
+      } else {
+        document.getElementById('edit-thumb-preview').innerHTML = `<span class="text-slate-500 text-[10px]">画像なし</span>`;
+      }
+
+      document.getElementById('edit-game-modal').classList.remove('hidden');
+    };
+
+    window.closeEditModal = () => {
+      document.getElementById('edit-game-modal').classList.add('hidden');
+    };
+
+    window.handleEditThumbFile = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      newThumbnailBlob = file;
+      const url = URL.createObjectURL(file);
+      document.getElementById('edit-thumb-preview').innerHTML = `<img src="${url}" class="w-full h-full object-cover object-center block">`;
+    };
+
+    window.captureEditThumbFromIframe = async () => {
+      if (!iframe.contentDocument && !iframe.contentWindow) return alert("プレイ画面が読み込まれていません！");
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        const win = iframe.contentWindow || window;
+        const canvasEls = doc.querySelectorAll('canvas');
+        let sourceCanvas = null;
+        if (canvasEls.length > 0) {
+          let maxArea = 0;
+          canvasEls.forEach(c => {
+            const area = (c.width || c.clientWidth || 0) * (c.height || c.clientHeight || 0);
+            if (area > maxArea) {
+              maxArea = area;
+              sourceCanvas = c;
+            }
+          });
+        }
+
+        const targetW = 640;
+        const targetH = 360;
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = targetW;
+        outCanvas.height = targetH;
+        const ctx = outCanvas.getContext('2d');
+        ctx.fillStyle = '#0b0f19';
+        ctx.fillRect(0, 0, targetW, targetH);
+
+        if (sourceCanvas && sourceCanvas.width > 0 && sourceCanvas.height > 0) {
+          const sw = sourceCanvas.width;
+          const sh = sourceCanvas.height;
+          const scale = Math.max(targetW / sw, targetH / sh);
+          const dw = sw * scale;
+          const dh = sh * scale;
+          const dx = (targetW - dw) / 2;
+          const dy = (targetH - dh) / 2;
+          ctx.drawImage(sourceCanvas, dx, dy, dw, dh);
+        } else {
+          const rootEl = doc.body || doc.documentElement;
+          const renderedCanvas = await html2canvas(rootEl, {
+            useCORS: true,
+            allowTaint: true,
+            logging: false,
+            windowWidth: doc.documentElement.clientWidth || win.innerWidth || 800,
+            windowHeight: doc.documentElement.clientHeight || win.innerHeight || 600
+          });
+          const sw = renderedCanvas.width;
+          const sh = renderedCanvas.height;
+          const scale = Math.max(targetW / sw, targetH / sh);
+          const dw = sw * scale;
+          const dh = sh * scale;
+          const dx = (targetW - dw) / 2;
+          const dy = (targetH - dh) / 2;
+          ctx.drawImage(renderedCanvas, dx, dy, dw, dh);
+        }
+
+        outCanvas.toBlob(blob => {
+          newThumbnailBlob = blob;
+          const url = URL.createObjectURL(blob);
+          document.getElementById('edit-thumb-preview').innerHTML = `<img src="${url}" class="w-full h-full object-cover object-center block">`;
+          alert('📸 プレイ画面からサムネイルをキャプチャしました！');
+        }, 'image/jpeg', 0.9);
+      } catch (err) {
+        alert('キャプチャ失敗: ' + err.message);
+      }
+    };
+
+    // アップデートファイルの選択
+    document.getElementById('edit-game-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      const statusEl = document.getElementById('edit-file-status');
+      if (!file) {
+        newGameFilePayload = null;
+        statusEl.innerText = '未選択（既存のゲームファイルが維持されます）';
+        return;
+      }
+
+      statusEl.innerText = `ファイル解析中: ${file.name}...`;
+
+      try {
+        if (file.name.toLowerCase().endsWith('.html')) {
+          const text = await file.text();
+          newGameFilePayload = new Blob([text], { type: 'text/html' });
+          newPayloadType = 'html';
+          statusEl.innerText = `✅ HTMLファイル準備完了 (${file.name})`;
+        } else if (file.name.toLowerCase().endsWith('.zip')) {
+          newGameFilePayload = file;
+          newPayloadType = 'zip';
+          statusEl.innerText = `✅ Zipファイル準備完了 (${file.name})`;
+        } else {
+          alert('.zip または .html ファイルを選択してください！');
+          e.target.value = '';
+          statusEl.innerText = 'エラー: 無効なファイル形式です';
+        }
+      } catch (err) {
+        statusEl.innerText = `エラー: ${err.message}`;
+      }
+    });
+
+    // アップデート保存実行
+    window.saveGameUpdates = async () => {
+      const title = document.getElementById('edit-game-title').value.trim();
+      const tag = document.getElementById('edit-game-tag').value;
+      const price = parseInt(document.getElementById('edit-game-price').value) || 0;
+      const desc = document.getElementById('edit-game-desc').value.trim();
+      const versionTitle = document.getElementById('edit-version-title').value.trim() || '最新アップデート';
+      const changelog = document.getElementById('edit-changelog').value.trim();
+      const saveBtn = document.getElementById('save-update-btn');
+
+      if (!title) return alert('タイトルを入力してください！');
+
+      saveBtn.disabled = true;
+      saveBtn.innerText = '保存＆アップロード中...';
+
+      try {
+        const updateData = {
+          title,
+          tag,
+          price_coins: price,
+          description: desc
+        };
+
+        // サムネイル画像の更新があればアップロード
+        if (newThumbnailBlob) {
+          const thumbPath = `${gameId}/thumbnail.jpg`;
+          await supabase.storage.from('games').upload(thumbPath, newThumbnailBlob, {
+            contentType: 'image/jpeg',
+            upsert: true
+          });
+          const newThumbUrl = supabase.storage.from('games').getPublicUrl(thumbPath).data.publicUrl;
+          updateData.thumbnail_url = `${newThumbUrl}?t=${Date.now()}`;
+        }
+
+        // ゲームファイルの更新があればアップロード
+        if (newGameFilePayload) {
+          const filename = newPayloadType === 'html' ? 'index.html' : 'game.zip';
+          await supabase.storage.from('games').upload(`${gameId}/${filename}`, newGameFilePayload, {
+            contentType: newPayloadType === 'html' ? 'text/html' : 'application/zip',
+            upsert: true
+          });
+          const newEntryUrl = supabase.storage.from('games').getPublicUrl(`${gameId}/${filename}`).data.publicUrl;
+          updateData.entry_url = `${newEntryUrl}?t=${Date.now()}`;
+        }
+
+        // games テーブルの更新
+        await supabase.from('games').update(updateData).eq('id', gameId);
+
+        // アップデート内容の記録（changelogが入力されている場合）
+        if (changelog) {
+          const updateRecord = {
+            game_id: gameId,
+            version_title: versionTitle,
+            changelog,
+            author_email: currentUser?.email || currentGame.author_email || '',
+            updated_at: new Date().toISOString()
+          };
+
+          // 1. サーバーAPIへ保存
+          try {
+            await fetch('/api/game-updates', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(updateRecord)
+            });
+          } catch (e) {}
+
+          // 2. Supabase game_updates テーブルへ挿入試行
+          try {
+            await supabase.from('game_updates').insert(updateRecord);
+          } catch (e) {}
+
+          // 3. localStorage にも保存
+          try {
+            const local = JSON.parse(localStorage.getItem(`ghub_updates_${gameId}`) || '[]');
+            local.unshift(updateRecord);
+            localStorage.setItem(`ghub_updates_${gameId}`, JSON.stringify(local));
+          } catch (e) {}
+        }
+
+        alert('🎉 ゲームの編集・アップデートを公開しました！');
+        closeEditModal();
+        window.location.reload();
+      } catch (err) {
+        alert('更新失敗: ' + err.message);
+        saveBtn.disabled = false;
+        saveBtn.innerText = '🚀 アップデートを保存・公開する';
+      }
+    };
 
     initEsbuild();
   </script>

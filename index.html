@@ -2,7 +2,12 @@
 <html lang="ja" class="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0b0f19">
+  <link rel="manifest" href="/manifest.json">
   <title>G-HUB - Indie Game Platform</title>
   <meta name="description" content="G-HUB - Indie Gaming Platform with Vite/React wasm bundler, Qwen AI concierge, and monetization." />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -13,6 +18,11 @@
   </script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
   <style>
+    /* PWA iOS セーフエリア最適化 */
+    body {
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
     /* タイトル画像・サムネイルの中央固定スタイル */
     .game-thumb-img {
       position: absolute;
@@ -25,6 +35,18 @@
       transform-origin: center center !important;
     }
   </style>
+  <script>
+    // iOS PWA Standalone モードでの Safari ツールバー復活防止
+    if (('standalone' in window.navigator) && window.navigator.standalone) {
+      document.addEventListener('click', function(e) {
+        let target = e.target.closest('a');
+        if (target && target.href && target.href.startsWith(window.location.origin) && !target.target && !target.hasAttribute('download')) {
+          e.preventDefault();
+          window.location.assign(target.href);
+        }
+      }, false);
+    }
+  </script>
 </head>
 <body class="bg-slate-100/70 dark:bg-[#0b0f19] text-slate-800 dark:text-slate-100 min-h-screen font-sans transition-colors duration-200">
 
