@@ -505,6 +505,51 @@ app.get('/api/download-raw-game', async (req, res) => {
   res.status(404).send('Raw game file not found');
 });
 
+// 💎 ゲーム内課金（アイテム購入・永続管理）API
+const inGamePurchasesStore = new Map();
+
+app.get('/api/ingame-purchases', (req, res) => {
+  const game_id = req.query.game_id;
+  const user_email = req.query.user_email;
+  if (!game_id || !user_email) return res.json({ purchases: [], owned_items: [] });
+  
+  const key = `${game_id}:${user_email}`;
+  const list = inGamePurchasesStore.get(key) || [];
+  const ownedItemIds = Array.from(new Set(list.filter(p => !p.consumable).map(p => p.item_id)));
+  res.json({
+    purchases: list,
+    owned_items: ownedItemIds
+  });
+});
+
+app.post('/api/ingame-purchases', (req, res) => {
+  const { game_id, user_email, item_id, item_name, price_coins, consumable } = req.body;
+  if (!game_id || !user_email || !item_id) return res.status(400).json({ error: 'Missing required fields' });
+  
+  const key = `${game_id}:${user_email}`;
+  const list = inGamePurchasesStore.get(key) || [];
+  const record = {
+    id: 'tx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+    game_id,
+    user_email,
+    item_id,
+    item_name: item_name || item_id,
+    price_coins: Number(price_coins) || 0,
+    consumable: Boolean(consumable),
+    created_at: new Date().toISOString()
+  };
+  list.push(record);
+  inGamePurchasesStore.set(key, list);
+
+  res.json({ success: true, transaction: record });
+});
+
+// 🪙 テストコインチャージ API
+app.post('/api/charge-coins', (req, res) => {
+  const { user_email, amount } = req.body;
+  res.json({ success: true, user_email: user_email || 'guest', charged: Number(amount) || 100 });
+});
+
 // フレンド管理 API
 app.get('/api/friends', (req, res) => {
   const user_email = req.query.user_email;

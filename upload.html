@@ -7,6 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#0b0f19">
+  <meta name="google-site-verification" content="-oHRcv-r1AKxmj2rod8d0Id_04t864zJl18x1JsIQTU" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="shortcut icon" href="/favicon.ico">
@@ -114,6 +115,22 @@
               <input type="number" id="game-trial-custom" placeholder="分" min="1" max="180" class="w-20 bg-[#2d2d2d] border border-[#444] p-2 rounded outline-none text-white hidden">
             </div>
           </div>
+
+          <!-- 💎 ゲーム内課金（アイテム販売）の案内 -->
+          <div class="bg-gradient-to-r from-amber-950/40 to-yellow-950/30 border border-amber-500/30 p-2.5 rounded-xl flex items-center justify-between gap-2 shadow-sm">
+            <div class="min-w-0">
+              <span class="text-[11px] font-bold text-amber-300 block flex items-center gap-1">
+                <span>💎</span> ゲーム内課金（アイテム販売・追加コンテンツ）対応！
+              </span>
+              <p class="text-[10px] text-slate-300 leading-tight mt-0.5">
+                ゲーム内のJavaScriptから <code>window.GHUB.requestPayment(...)</code> を呼ぶだけで課金要素を導入できます。
+              </p>
+            </div>
+            <a href="play.html?guide=monetization" target="_blank" class="shrink-0 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black px-2.5 py-1.5 rounded-lg shadow whitespace-nowrap transition cursor-pointer">
+              マニュアルを見る
+            </a>
+          </div>
+
           <div>
             <label class="block font-bold mb-1 text-slate-300">説明文</label>
             <textarea id="game-desc" rows="2" placeholder="ゲームの説明や操作方法" class="w-full bg-[#2d2d2d] border border-[#444] p-2 rounded outline-none text-white"></textarea>
