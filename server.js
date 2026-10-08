@@ -1,7 +1,9 @@
 import express from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
+import JSZip from 'jszip';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -322,6 +324,185 @@ app.get('/api/games/payload/:id', (req, res) => {
   if (!payload) return res.status(404).send('Game file not found');
   res.setHeader('Content-Type', payload.contentType);
   res.send(payload.buffer);
+});
+
+// オフライン用アセット配信
+app.use('/offline-assets', express.static(path.join(__dirname, 'offline-assets')));
+
+// 📥 完全オフライン用HTMLパッケージダウンロードAPI
+app.get('/api/download-offline-game', async (req, res) => {
+  const game_id = req.query.id;
+  if (!game_id) return res.status(400).send('Missing game id');
+
+  let game = gamesStore.get(game_id) || cachedActualGames.find(g => g.id === game_id);
+  if (!game) {
+    try {
+      const sRes = await fetch(`https://ddcnoghsiuxfhnwmtpyn.supabase.co/rest/v1/games?id=eq.${encodeURIComponent(game_id)}&select=*`, {
+        headers: {
+          'apikey': 'sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj',
+          'Authorization': 'Bearer sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj'
+        },
+        signal: AbortSignal.timeout(5000)
+      });
+      if (sRes.ok) {
+        const arr = await sRes.json();
+        if (arr && arr[0]) game = arr[0];
+      }
+    } catch (e) {}
+  }
+
+  if (!game) return res.status(404).send('Game not found');
+
+  let htmlContent = '';
+  const payload = payloadsStore.get(game_id);
+  if (payload && payload.contentType.includes('html')) {
+    htmlContent = payload.buffer.toString('utf-8');
+  } else if (payload && (payload.contentType.includes('zip') || payload.contentType.includes('octet-stream'))) {
+    try {
+      const zip = await JSZip.loadAsync(payload.buffer);
+      const files = Object.keys(zip.files);
+      const htmlFile = files.find(f => f.toLowerCase().endsWith('index.html') && !zip.files[f].dir);
+      if (htmlFile) {
+        htmlContent = await zip.files[htmlFile].async('text');
+      }
+    } catch (e) {
+      console.warn('Zip展開エラー:', e);
+    }
+  } else if (game.entry_url) {
+    try {
+      let fetchUrl = game.entry_url;
+      if (fetchUrl.includes('supabase.co')) {
+        fetchUrl = fetchUrl.replace(/https:\/\/[^/]+\.supabase\.co/, 'https://ddcnoghsiuxfhnwmtpyn.supabase.co');
+      }
+      const gRes = await fetch(fetchUrl);
+      if (gRes.ok) {
+        const ab = await gRes.arrayBuffer();
+        const u8 = new Uint8Array(ab);
+        if (u8.length >= 4 && u8[0] === 0x50 && u8[1] === 0x4B) {
+          // Zip検出
+          try {
+            const zip = await JSZip.loadAsync(ab);
+            const files = Object.keys(zip.files);
+            const htmlFile = files.find(f => f.toLowerCase().endsWith('index.html') && !zip.files[f].dir);
+            if (htmlFile) {
+              htmlContent = await zip.files[htmlFile].async('text');
+            }
+          } catch (e) {}
+        } else {
+          const text = new TextDecoder('utf-8').decode(u8);
+          if (text.includes('<html') || text.includes('<!DOCTYPE') || text.includes('<script')) {
+            htmlContent = text;
+          }
+        }
+      }
+    } catch (e) {}
+  }
+
+  if (!htmlContent) {
+    htmlContent = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>${game.title}</title><style>body{background:#0b0f19;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head><body><div style="text-align:center;"><h1>🎮 ${game.title}</h1><p>${game.description || ''}</p></div></body></html>`;
+  }
+
+  // オフライン用ライブラリコード読み込み
+  const reactPath = path.join(__dirname, 'offline-assets/react.production.min.js');
+  const reactDomPath = path.join(__dirname, 'offline-assets/react-dom.production.min.js');
+  const tailwindPath = path.join(__dirname, 'offline-assets/tailwind.min.js');
+
+  const reactCode = fs.existsSync(reactPath) ? fs.readFileSync(reactPath, 'utf-8') : '';
+  const reactDomCode = fs.existsSync(reactDomPath) ? fs.readFileSync(reactDomPath, 'utf-8') : '';
+  const tailwindCode = fs.existsSync(tailwindPath) ? fs.readFileSync(tailwindPath, 'utf-8') : '';
+
+  const offlineImportMap = `
+  <script type="importmap">
+  {
+    "imports": {
+      "react": "data:text/javascript;charset=utf-8,export default window.React;export const {createElement,useState,useEffect,useRef,useMemo,useCallback,useContext,createContext,useReducer,Suspense,Fragment,Children,isValidElement,cloneElement}=window.React;",
+      "react/jsx-runtime": "data:text/javascript;charset=utf-8,export const jsx=window.React.createElement;export const jsxs=window.React.createElement;export const Fragment=window.React.Fragment;",
+      "react-dom": "data:text/javascript;charset=utf-8,export default window.ReactDOM;",
+      "react-dom/client": "data:text/javascript;charset=utf-8,export const createRoot=window.ReactDOM.createRoot;export const hydrateRoot=window.ReactDOM.hydrateRoot;export default window.ReactDOM;",
+      "https://esm.sh/react@18.2.0?dev": "data:text/javascript;charset=utf-8,export default window.React;export const {createElement,useState,useEffect,useRef,useMemo,useCallback,useContext,createContext,useReducer,Suspense,Fragment,Children,isValidElement,cloneElement}=window.React;",
+      "https://esm.sh/react@18.2.0": "data:text/javascript;charset=utf-8,export default window.React;export const {createElement,useState,useEffect,useRef,useMemo,useCallback,useContext,createContext,useReducer,Suspense,Fragment,Children,isValidElement,cloneElement}=window.React;",
+      "https://esm.sh/react-dom@18.2.0/client?dev": "data:text/javascript;charset=utf-8,export const createRoot=window.ReactDOM.createRoot;export const hydrateRoot=window.ReactDOM.hydrateRoot;export default window.ReactDOM;",
+      "https://esm.sh/react-dom@18.2.0/client": "data:text/javascript;charset=utf-8,export const createRoot=window.ReactDOM.createRoot;export const hydrateRoot=window.ReactDOM.hydrateRoot;export default window.ReactDOM;",
+      "https://esm.sh/react-dom@18.2.0": "data:text/javascript;charset=utf-8,export default window.ReactDOM;",
+      "https://esm.sh/react-dom": "data:text/javascript;charset=utf-8,export default window.ReactDOM;"
+    }
+  }
+  </script>
+  `;
+
+  const inlineLibs = `
+  <script>
+  /* G-HUB Offline Packager: Embedded React 18 & ReactDOM Engine & Safety Shims */
+  window.__GHUB_OFFLINE = true;
+  document.addEventListener('click', () => {
+    if (window.AudioContext || window.webkitAudioContext) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === 'suspended') ctx.resume();
+      } catch(e){}
+    }
+  }, { once: true });
+  ${reactCode}
+  ${reactDomCode}
+  </script>
+  ${offlineImportMap}
+  `;
+
+  // Tailwind CDNのスクリプトをローカルインライン版に置換
+  if (htmlContent.includes('cdn.tailwindcss.com')) {
+    htmlContent = htmlContent.replace(/<script[^>]*src=["'][^"']*cdn\.tailwindcss\.com[^"']*["'][^>]*><\/script>/gi, `<script>${tailwindCode}</script>`);
+  }
+
+  if (htmlContent.includes('<head>')) {
+    htmlContent = htmlContent.replace('<head>', `<head>${inlineLibs}`);
+  } else if (htmlContent.includes('<html>')) {
+    htmlContent = htmlContent.replace('<html>', `<html><head>${inlineLibs}</head>`);
+  } else {
+    htmlContent = `<head>${inlineLibs}</head>${htmlContent}`;
+  }
+
+  const safeTitle = (game.title || 'game').replace(/[/\\?%*:|"<>]/g, '_');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(safeTitle)}-offline.html`);
+  res.send(htmlContent);
+});
+
+// 📁 元のゲームファイル (ZIP / HTML) ダウンロードAPI
+app.get('/api/download-raw-game', async (req, res) => {
+  const game_id = req.query.id;
+  if (!game_id) return res.status(400).send('Missing game id');
+
+  let game = gamesStore.get(game_id) || cachedActualGames.find(g => g.id === game_id);
+  if (!game) {
+    try {
+      const sRes = await fetch(`https://ddcnoghsiuxfhnwmtpyn.supabase.co/rest/v1/games?id=eq.${encodeURIComponent(game_id)}&select=*`, {
+        headers: {
+          'apikey': 'sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj',
+          'Authorization': 'Bearer sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj'
+        },
+        signal: AbortSignal.timeout(5000)
+      });
+      if (sRes.ok) {
+        const arr = await sRes.json();
+        if (arr && arr[0]) game = arr[0];
+      }
+    } catch (e) {}
+  }
+
+  const payload = payloadsStore.get(game_id);
+  if (payload) {
+    const ext = payload.contentType.includes('zip') ? '.zip' : '.html';
+    const safeTitle = (game?.title || 'game').replace(/[/\\?%*:|"<>]/g, '_');
+    res.setHeader('Content-Type', payload.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(safeTitle)}${ext}`);
+    return res.send(payload.buffer);
+  }
+
+  if (game && game.entry_url) {
+    return res.redirect(game.entry_url);
+  }
+
+  res.status(404).send('Raw game file not found');
 });
 
 // フレンド管理 API

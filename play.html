@@ -8,6 +8,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#0b0f19">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.json">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
@@ -61,8 +65,14 @@
         </button>
       </div>
 
-      <div class="flex items-center gap-2">
-        <button onclick="openFriendModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow">
+      <div class="flex items-center gap-2 flex-wrap">
+        <button onclick="openShareModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow">
+          <span>🔗</span> 共有
+        </button>
+        <button onclick="downloadOfflineGame()" id="header-download-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow" title="インターネット不要で遊べるHTMLファイルをダウンロード">
+          <span>📥</span> オフライン保存
+        </button>
+        <button onclick="openFriendModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow">
           👥 Friends
         </button>
         <button onclick="sendTip(30)" id="tip-btn" class="bg-gradient-to-r from-amber-500 to-yellow-500 hover:opacity-90 px-3 py-1.5 rounded-xl font-bold text-xs text-slate-950 flex items-center gap-1 shadow">
@@ -111,9 +121,15 @@
                 ⏳ 体験版 残り --:--
               </span>
             </div>
-            <div class="flex gap-2 shrink-0">
-              <button id="clear-data-btn" class="bg-[#dc2626] hover:bg-[#ef4444] text-white px-3 py-1 rounded font-bold text-xs transition">🗑️ セーブデータ消去</button>
-              <button id="fullscreen-btn" class="bg-[#4f46e5] hover:bg-[#6366f1] text-white px-3 py-1 rounded font-bold text-xs transition flex items-center gap-1">
+            <div class="flex gap-2 shrink-0 items-center">
+              <button onclick="downloadOfflineGame()" class="bg-emerald-600/90 hover:bg-emerald-600 text-white px-2.5 py-1 rounded font-bold text-xs transition flex items-center gap-1 shadow-sm" title="ネット不要で遊べるHTMLファイルをダウンロード">
+                <span>📥</span> オフライン保存
+              </button>
+              <button onclick="openShareModal()" class="bg-indigo-600/80 hover:bg-indigo-600 text-white px-2.5 py-1 rounded font-bold text-xs transition flex items-center gap-1 shadow-sm">
+                <span>🔗</span> 共有
+              </button>
+              <button id="clear-data-btn" class="bg-[#dc2626] hover:bg-[#ef4444] text-white px-2.5 py-1 rounded font-bold text-xs transition">🗑️ セーブデータ消去</button>
+              <button id="fullscreen-btn" class="bg-[#4f46e5] hover:bg-[#6366f1] text-white px-2.5 py-1 rounded font-bold text-xs transition flex items-center gap-1">
                 <span>⛶</span> 全画面表示
               </button>
             </div>
@@ -389,6 +405,103 @@
           リアルタイム更新中 (12秒毎)
         </span>
         <button onclick="loadFriendsStatus()" class="text-indigo-400 hover:underline">🔄 今すぐ更新</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔗 ゲーム共有モーダル -->
+  <div id="share-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-[#252526] border border-[#444] p-6 rounded-3xl max-w-md w-full shadow-2xl text-xs space-y-4">
+      <div class="flex justify-between items-center border-b border-[#333] pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">🔗</span>
+          <h2 class="text-base font-black text-white">ゲームを共有する</h2>
+        </div>
+        <button onclick="closeShareModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+      </div>
+
+      <!-- プレビュー -->
+      <div class="bg-[#1e1e1e] p-3 rounded-2xl border border-[#333] flex items-center gap-3">
+        <div id="share-thumb-box" class="w-12 h-12 rounded-xl bg-slate-800 overflow-hidden shrink-0 flex items-center justify-center border border-[#444]">
+          🎮
+        </div>
+        <div class="min-w-0 flex-1">
+          <h4 id="share-title-text" class="font-bold text-sm text-white truncate">ゲームタイトル</h4>
+          <p id="share-tag-text" class="text-[10px] text-indigo-400 font-mono">Action</p>
+        </div>
+      </div>
+
+      <!-- 共有文面 -->
+      <div>
+        <label class="block font-bold mb-1 text-slate-300">共有メッセージ & URL</label>
+        <textarea id="share-message-box" rows="4" readonly class="w-full bg-[#1e1e1e] border border-[#444] p-2.5 rounded-xl text-white outline-none font-mono text-[11px] select-all leading-relaxed"></textarea>
+      </div>
+
+      <!-- アクションボタン -->
+      <div class="space-y-2">
+        <button onclick="copyFullShareText()" id="copy-share-full-btn" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-95 text-white font-black py-2.5 rounded-xl text-xs shadow flex items-center justify-center gap-2 transition">
+          <span>📋</span> 紹介文 ＆ リンクをコピー
+        </button>
+        <button onclick="copyShareLinkOnly()" id="copy-share-link-btn" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2 rounded-xl text-xs border border-slate-700 flex items-center justify-center gap-2 transition">
+          <span>🔗</span> リンクURLのみコピー
+        </button>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button onclick="shareToTwitter()" class="bg-[#000] hover:bg-[#111] text-white font-bold py-2 rounded-xl border border-[#333] flex items-center justify-center gap-1.5 transition">
+            <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 24.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+            X でポスト
+          </button>
+          <button onclick="shareToLine()" class="bg-[#06c755] hover:bg-[#05b34c] text-white font-bold py-2 rounded-xl flex items-center justify-center gap-1.5 transition">
+            💬 LINE で送る
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 📥 ゲームダウンロード（オフライン保存）モーダル -->
+  <div id="download-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-[#252526] border border-[#444] p-6 rounded-3xl max-w-md w-full shadow-2xl text-xs space-y-4">
+      <div class="flex justify-between items-center border-b border-[#333] pb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-lg">📥</span>
+          <h2 class="text-base font-black text-white">ゲームを保存（オフラインプレイ）</h2>
+        </div>
+        <button onclick="closeDownloadModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+      </div>
+
+      <div class="space-y-3">
+        <!-- 選択肢 1: 完全オフラインHTML -->
+        <div class="bg-[#1e1e1e] p-4 rounded-2xl border border-indigo-500/40 space-y-2 relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-white text-sm flex items-center gap-1.5">
+              <span>📦</span> 完全オフラインHTML
+            </span>
+            <span class="bg-indigo-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">推奨</span>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            必要なJSライブラリ（React, ReactDOM, Tailwind CSS）がすべてHTML内に同梱されます。<br>
+            インターネット接続が切れた状態や機内モードでも、ブラウザでダブルクリックするだけでそのまま動作します！
+          </p>
+          <button onclick="executeDownloadOfflineHtml()" id="btn-dl-offline-html" class="w-full mt-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-95 text-white font-black py-2.5 rounded-xl text-xs shadow flex items-center justify-center gap-2 transition">
+            <span>⚡</span> 完全オフラインHTMLを保存 (.html)
+          </button>
+        </div>
+
+        <!-- 選択肢 2: 元のゲームファイル -->
+        <div class="bg-[#1e1e1e] p-4 rounded-2xl border border-[#333] space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-slate-200 text-sm flex items-center gap-1.5">
+              <span>📁</span> 元のアップロードファイル
+            </span>
+            <span class="text-[10px] text-slate-400 font-mono">Archive</span>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            作者によって投稿された元のファイル（.zip または .html）をそのまま保存します。
+          </p>
+          <button onclick="downloadRawGameFile()" class="w-full mt-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-2 rounded-xl text-xs border border-slate-700 flex items-center justify-center gap-2 transition">
+            <span>💾</span> 元のファイルをダウンロード
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -1958,6 +2071,258 @@
       const diffDay = Math.floor(diffHr / 24);
       return `${diffDay}日前`;
     }
+
+    // ★★★ 🔗 ゲーム共有機能（リンク & 紹介文 & SNS連携） ★★★
+    function getShareTextAndUrl() {
+      const title = currentGame?.title || document.getElementById('game-title')?.innerText || 'インディーゲーム';
+      const desc = currentGame?.description || document.getElementById('game-desc')?.innerText || '';
+      const tag = currentGame?.tag || 'Game';
+      const url = window.location.href;
+      const cleanDesc = desc ? `「${desc.slice(0, 60)}${desc.length > 60 ? '...' : ''}」\n` : '';
+      
+      const fullText = `【G-HUB】『${title}』をプレイ中！🎮\n${cleanDesc}ブラウザで今すぐ無料プレイ！✨\n#GHUB #${tag} #IndieGames\n${url}`;
+      return { title, desc, tag, url, fullText };
+    }
+
+    window.openShareModal = async () => {
+      const { title, tag, url, fullText } = getShareTextAndUrl();
+
+      // Web Share APIが利用可能かつモバイルの場合はOS共有を優先試行
+      if (navigator.share && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        try {
+          await navigator.share({
+            title: `${title} - G-HUB`,
+            text: fullText,
+            url: url
+          });
+          return;
+        } catch (e) {
+          if (e.name !== 'AbortError') console.warn('navigator.share failed:', e);
+        }
+      }
+
+      // モーダルを開いて詳細共有オプションを提供
+      document.getElementById('share-title-text').innerText = title;
+      document.getElementById('share-tag-text').innerText = `Tag: ${tag}`;
+      document.getElementById('share-message-box').value = fullText;
+
+      const thumbBox = document.getElementById('share-thumb-box');
+      if (currentGame?.thumbnail_url) {
+        thumbBox.innerHTML = `<img src="${currentGame.thumbnail_url}" class="w-full h-full object-cover">`;
+      } else {
+        thumbBox.innerHTML = `🎮`;
+      }
+
+      document.getElementById('share-modal').classList.remove('hidden');
+    };
+
+    window.closeShareModal = () => {
+      document.getElementById('share-modal').classList.add('hidden');
+    };
+
+    window.copyFullShareText = async () => {
+      const box = document.getElementById('share-message-box');
+      const text = box.value;
+      const btn = document.getElementById('copy-share-full-btn');
+      try {
+        await navigator.clipboard.writeText(text);
+        const origText = btn.innerHTML;
+        btn.innerHTML = '<span>✅</span> コピーしました！';
+        setTimeout(() => btn.innerHTML = origText, 2500);
+      } catch (e) {
+        box.select();
+        document.execCommand('copy');
+        alert('紹介文とリンクをコピーしました！');
+      }
+    };
+
+    window.copyShareLinkOnly = async () => {
+      const url = window.location.href;
+      const btn = document.getElementById('copy-share-link-btn');
+      try {
+        await navigator.clipboard.writeText(url);
+        const origText = btn.innerHTML;
+        btn.innerHTML = '<span>✅</span> URLをコピーしました！';
+        setTimeout(() => btn.innerHTML = origText, 2500);
+      } catch (e) {
+        prompt('リンクURLをコピーしてください:', url);
+      }
+    };
+
+    window.shareToTwitter = () => {
+      const { title, tag, url } = getShareTextAndUrl();
+      const text = `【G-HUB】『${title}』をプレイ中！🎮\nブラウザですぐに遊べるインディーゲーム！\n#GHUB #${tag}`;
+      const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+      window.open(twitterUrl, '_blank', 'width=600,height=400');
+    };
+
+    window.shareToLine = () => {
+      const { fullText } = getShareTextAndUrl();
+      const lineUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(fullText)}`;
+      window.open(lineUrl, '_blank', 'width=600,height=500');
+    };
+
+    // ★★★ 📥 完全オフライン用ゲームダウンロード機能 ★★★
+    window.downloadOfflineGame = () => {
+      if (!currentGame) return alert('ゲームの読み込み完了までお待ちください');
+      document.getElementById('download-modal').classList.remove('hidden');
+    };
+
+    window.closeDownloadModal = () => {
+      document.getElementById('download-modal').classList.add('hidden');
+    };
+
+    window.downloadRawGameFile = () => {
+      if (!currentGame) return;
+      window.location.href = `/api/download-raw-game?id=${encodeURIComponent(gameId)}`;
+      closeDownloadModal();
+    };
+
+    window.executeDownloadOfflineHtml = async () => {
+      if (!currentGame) return alert('ゲームの読み込み完了までお待ちください');
+      
+      const title = currentGame.title || 'game';
+      const safeTitle = title.replace(/[/\\?%*:|"<>]/g, '_');
+      const btn = document.getElementById('btn-dl-offline-html');
+      const origBtnHtml = btn ? btn.innerHTML : '';
+      if (btn) btn.innerHTML = '<span>⏳</span> パッケージ生成中...';
+
+      log(`\n📥 「${title}」の完全オフライン用HTMLパッケージを作成中...`);
+
+      try {
+        // 1. オフライン用依存ライブラリ（React, ReactDOM, Tailwind）をキャッシュまたはサーバーから取得
+        let reactCode = '';
+        let reactDomCode = '';
+        let tailwindCode = '';
+
+        try {
+          const [rRes, rdRes, twRes] = await Promise.all([
+            fetch('/offline-assets/react.production.min.js'),
+            fetch('/offline-assets/react-dom.production.min.js'),
+            fetch('/offline-assets/tailwind.min.js')
+          ]);
+          if (rRes.ok) reactCode = await rRes.text();
+          if (rdRes.ok) reactDomCode = await rdRes.text();
+          if (twRes.ok) tailwindCode = await twRes.text();
+        } catch (e) {
+          console.warn('ローカルオフラインアセットの取得失敗、サーバーダウンロードへフォールバックします:', e);
+        }
+
+        // 2. 現在のiframe内のsrcdocまたは文書を取得
+        let rawHtml = iframe.srcdoc || '';
+        if (!rawHtml && iframe.contentDocument) {
+          rawHtml = iframe.contentDocument.documentElement.outerHTML;
+        }
+
+        // srcdocが無いか破損している場合はサーバーAPIエンドポイントから直接ダウンロード
+        if (!rawHtml || rawHtml.length < 50 || (!reactCode && !reactDomCode)) {
+          log('🌐 サーバーエンドポイントから完全オフライン版を生成してダウンロードします...');
+          window.location.href = `/api/download-offline-game?id=${encodeURIComponent(gameId)}`;
+          closeDownloadModal();
+          return;
+        }
+
+        // 3. インラインCSSの抽出（Tailwind CDNが生成した全CSSルールを確実に保持）
+        let generatedStyles = '';
+        try {
+          if (iframe.contentDocument) {
+            const styles = iframe.contentDocument.querySelectorAll('style');
+            styles.forEach(s => {
+              if (s.textContent) generatedStyles += `\n/* generated style */\n` + s.textContent;
+            });
+          }
+        } catch (e) {}
+
+        // 4. オフライン用インポートマップ（esm.shのReactインポートをゼロネットワークのData URLへ完全転送）
+        const offlineImportMap = `
+        <script type="importmap">
+        {
+          "imports": {
+            "react": "data:text/javascript;charset=utf-8,export default window.React;export const {createElement,useState,useEffect,useRef,useMemo,useCallback,useContext,createContext,useReducer,Suspense,Fragment,Children,isValidElement,cloneElement}=window.React;",
+            "react/jsx-runtime": "data:text/javascript;charset=utf-8,export const jsx=window.React.createElement;export const jsxs=window.React.createElement;export const Fragment=window.React.Fragment;",
+            "react-dom": "data:text/javascript;charset=utf-8,export default window.ReactDOM;",
+            "react-dom/client": "data:text/javascript;charset=utf-8,export const createRoot=window.ReactDOM.createRoot;export const hydrateRoot=window.ReactDOM.hydrateRoot;export default window.ReactDOM;",
+            "https://esm.sh/react@18.2.0?dev": "data:text/javascript;charset=utf-8,export default window.React;export const {createElement,useState,useEffect,useRef,useMemo,useCallback,useContext,createContext,useReducer,Suspense,Fragment,Children,isValidElement,cloneElement}=window.React;",
+            "https://esm.sh/react@18.2.0": "data:text/javascript;charset=utf-8,export default window.React;export const {createElement,useState,useEffect,useRef,useMemo,useCallback,useContext,createContext,useReducer,Suspense,Fragment,Children,isValidElement,cloneElement}=window.React;",
+            "https://esm.sh/react-dom@18.2.0/client?dev": "data:text/javascript;charset=utf-8,export const createRoot=window.ReactDOM.createRoot;export const hydrateRoot=window.ReactDOM.hydrateRoot;export default window.ReactDOM;",
+            "https://esm.sh/react-dom@18.2.0/client": "data:text/javascript;charset=utf-8,export const createRoot=window.ReactDOM.createRoot;export const hydrateRoot=window.ReactDOM.hydrateRoot;export default window.ReactDOM;",
+            "https://esm.sh/react-dom@18.2.0": "data:text/javascript;charset=utf-8,export default window.ReactDOM;",
+            "https://esm.sh/react-dom": "data:text/javascript;charset=utf-8,export default window.ReactDOM;"
+          }
+        }
+        <\/script>
+        `;
+
+        const inlineLibs = `
+        <script>
+        /* G-HUB Offline Packager: Embedded React 18 & ReactDOM Engine & Safety Shims */
+        window.__GHUB_OFFLINE = true;
+        document.addEventListener('click', () => {
+          if (window.AudioContext || window.webkitAudioContext) {
+            try {
+              const ctx = new (window.AudioContext || window.webkitAudioContext)();
+              if (ctx.state === 'suspended') ctx.resume();
+            } catch(e){}
+          }
+        }, { once: true });
+        ${reactCode}
+        ${reactDomCode}
+        <\/script>
+        ${offlineImportMap}
+        ${generatedStyles ? `<style>${generatedStyles}</style>` : ''}
+        `;
+
+        // 5. Tailwind CDNをインラインコードに置換
+        if (tailwindCode && rawHtml.includes('cdn.tailwindcss.com')) {
+          rawHtml = rawHtml.replace(/<script[^>]*src=["'][^"']*cdn\.tailwindcss\.com[^"']*["'][^>]*><\/script>/gi, `<script>${tailwindCode}<\/script>`);
+        }
+
+        // 6. ライブラリを <head> に注入
+        let finalOfflineHtml = rawHtml;
+        if (finalOfflineHtml.includes('<head>')) {
+          finalOfflineHtml = finalOfflineHtml.replace('<head>', `<head>${inlineLibs}`);
+        } else if (finalOfflineHtml.includes('<html>')) {
+          finalOfflineHtml = finalOfflineHtml.replace('<html>', `<html><head>${inlineLibs}</head>`);
+        } else {
+          finalOfflineHtml = `<head>${inlineLibs}</head>${finalOfflineHtml}`;
+        }
+
+        // オフラインバナーUIの追加
+        const offlineBadge = `
+        <div id="ghub-offline-indicator" style="position:fixed;bottom:10px;right:10px;z-index:999999;background:rgba(15,23,42,0.95);color:#38bdf8;border:1px solid #334155;border-radius:10px;padding:6px 12px;font-family:sans-serif;font-size:11px;font-weight:bold;box-shadow:0 4px 12px rgba(0,0,0,0.5);display:flex;align-items:center;gap:6px;">
+          <span>⚡ G-HUB オフライン版</span>
+          <span style="color:#94a3b8;font-weight:normal;">| ネット接続不要</span>
+          <button onclick="document.getElementById('ghub-offline-indicator').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:12px;margin-left:4px;">✕</button>
+        </div>
+        `;
+        if (finalOfflineHtml.includes('</body>')) {
+          finalOfflineHtml = finalOfflineHtml.replace('</body>', `${offlineBadge}</body>`);
+        } else {
+          finalOfflineHtml += offlineBadge;
+        }
+
+        // 7. ダウンロード実行
+        const blob = new Blob([finalOfflineHtml], { type: 'text/html;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${safeTitle}-offline.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+
+        log(`🎉 「${title}」のオフライン版HTMLをダウンロードしました！`);
+        closeDownloadModal();
+        alert(`🎉 「${title}」の完全オフライン版（.html）をダウンロードしました！\n\nインターネットがない環境や機内モードでも、ダウンロードしたファイルをブラウザでダブルクリックするだけでそのまま遊べます！`);
+
+      } catch (err) {
+        log(`❌ クライアント側オフライン生成失敗、サーバーからダウンロードします: ${err.message}`);
+        window.location.href = `/api/download-offline-game?id=${encodeURIComponent(gameId)}`;
+        closeDownloadModal();
+      } finally {
+        if (btn) btn.innerHTML = origBtnHtml;
+      }
+    };
 
     initEsbuild();
   </script>

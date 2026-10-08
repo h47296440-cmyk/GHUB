@@ -8,6 +8,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#0b0f19">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.json">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
@@ -219,16 +223,24 @@
               <span>🎮 ${g.play_count || 0} 回</span>
             </div>
           </div>
-          <div class="mt-3 flex gap-2">
+          <div class="mt-3 flex gap-1.5 flex-wrap">
             <a href="play.html?id=${g.id}" class="flex-1 text-center bg-slate-800 hover:bg-slate-700 py-2 rounded-xl text-xs font-bold text-indigo-400 transition">
               プレイ
             </a>
-            <a href="play.html?id=${g.id}" onclick="sessionStorage.setItem('open_edit', 'true')" class="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1">
+            <a href="play.html?id=${g.id}" onclick="sessionStorage.setItem('open_edit', 'true')" class="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/40 px-2.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1">
               ✏️ 編集
             </a>
+            <button onclick="downloadGameOffline('${g.id}', '${(g.title||'game').replace(/['"]/g, '')}')" class="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 px-2.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1" title="完全オフラインHTMLを保存">
+              📥 保存
+            </button>
           </div>
         </div>
       `).join('');
+
+      window.downloadGameOffline = (id, title) => {
+        window.location.href = `/api/download-offline-game?id=${encodeURIComponent(id)}`;
+        alert(`🎉 「${title}」の完全オフライン版（.html）をダウンロードしました！\n\nインターネット不要で、ブラウザでダブルクリックするだけでそのまま遊べます！`);
+      };
 
       initMyPlayHistory();
       initFriendsSection();

@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#080b14" />
+      <stop offset="50%" stop-color="#131131" />
+      <stop offset="100%" stop-color="#080b14" />
+    </linearGradient>
+    <linearGradient id="glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="50%" stop-color="#a855f7" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#c084fc" />
+      <stop offset="100%" stop-color="#f472b6" />
+    </linearGradient>
+    <filter id="dropGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#8b5cf6" flood-opacity="0.55" />
+    </filter>
+  </defs>
+
+  <!-- Background squircle -->
+  <rect width="512" height="512" rx="118" fill="url(#bg)" />
+  <rect width="500" height="500" x="6" y="6" rx="112" fill="none" stroke="url(#glow)" stroke-width="6" stroke-opacity="0.5" />
+
+  <!-- Controller & G Motif -->
+  <g filter="url(#dropGlow)" transform="translate(0, -22)">
+    <!-- Main G Body (Gamepad shaped) -->
+    <path d="M 365 178 C 336 126 274 105 204 112 C 130 120 84 178 86 256 C 89 334 150 380 238 376 C 322 372 376 316 376 250 L 240 250 L 240 284 L 335 284 C 329 320 293 346 236 346 C 174 346 127 309 122 254 C 117 199 154 151 210 146 C 260 141 302 160 328 196 Z" fill="url(#glow)" />
+    
+    <!-- D-pad on left wing -->
+    <path d="M 172 216 L 191 216 L 191 197 L 211 197 L 211 216 L 230 216 L 230 236 L 211 236 L 211 255 L 191 255 L 191 236 L 172 236 Z" fill="#38bdf8" />
+    
+    <!-- Action buttons on right wing -->
+    <circle cx="302" cy="198" r="12.5" fill="#ec4899" />
+    <circle cx="330" cy="224" r="11" fill="#f59e0b" />
+    <circle cx="274" cy="224" r="11" fill="#10b981" />
+    
+    <!-- Analog Thumbsticks -->
+    <circle cx="198" cy="314" r="18" fill="#1e1b4b" stroke="#6366f1" stroke-width="4" />
+    <circle cx="198" cy="314" r="8" fill="#38bdf8" />
+    <circle cx="278" cy="314" r="18" fill="#1e1b4b" stroke="#ec4899" stroke-width="4" />
+    <circle cx="278" cy="314" r="8" fill="#ec4899" />
+  </g>
+
+  <!-- Spark accents -->
+  <polygon points="416,104 422,118 436,124 422,130 416,144 410,130 396,124 410,118" fill="#38bdf8" opacity="0.95" />
+  <circle cx="96" cy="108" r="8" fill="#ec4899" opacity="0.85" />
+
+  <!-- GHUB Typography Banner -->
+  <text x="256" y="440" font-family="'Arial Black', Impact, sans-serif" font-weight="900" font-size="56" fill="url(#textGrad)" text-anchor="middle" letter-spacing="6">G-HUB</text>
+  <rect x="176" y="462" width="160" height="4" rx="2" fill="url(#glow)" opacity="0.8" />
+</svg>
