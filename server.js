@@ -544,10 +544,9 @@ app.post('/api/ingame-purchases', (req, res) => {
   res.json({ success: true, transaction: record });
 });
 
-// 🪙 テストコインチャージ API
+// 🪙 コインチャージ API（無限チャージ防止のため無効化）
 app.post('/api/charge-coins', (req, res) => {
-  const { user_email, amount } = req.body;
-  res.json({ success: true, user_email: user_email || 'guest', charged: Number(amount) || 100 });
+  res.status(403).json({ error: '任意チャージ機能は無効化されています。コインはログインボーナスやゲーム販売で獲得してください。' });
 });
 
 // フレンド管理 API

@@ -123,11 +123,15 @@
               </span>
             </div>
             <div class="flex gap-1.5 shrink-0 items-center flex-wrap justify-end">
-              <!-- 所持コイン表示 & テストチャージ -->
-              <div class="bg-amber-500/10 border border-amber-500/30 text-amber-300 px-2 py-0.5 rounded text-[11px] font-mono font-bold flex items-center gap-1.5 shadow-sm" title="現在の所持コイン（ゲーム内アイテム購入に使用できます）">
+              <!-- 所持コイン表示 -->
+              <div class="bg-amber-500/10 border border-amber-500/30 text-amber-300 px-2.5 py-1 rounded text-xs font-mono font-bold flex items-center gap-1.5 shadow-sm" title="現在の所持コイン（ゲーム内アイテム購入に使用できます）">
                 <span>🪙</span> <span id="player-coin-display">0 G</span>
-                <button type="button" onclick="quickChargeCoins(100)" class="text-[10px] bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-1.5 py-0.2 rounded ml-0.5 transition" title="テスト用コインを+100Gチャージ">＋100G</button>
               </div>
+
+              <!-- ⚡ シームレス課金モード切替ボタン -->
+              <button type="button" id="seamless-mode-btn" onclick="toggleSeamlessMode()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-2 py-1 rounded font-bold text-xs transition flex items-center gap-1 shadow-sm" title="ONにすると購入確認ポップアップを省略しゲーム画面のままシームレスに直接購入します">
+                <span>⚡</span> <span id="seamless-mode-label">シームレス: OFF</span>
+              </button>
 
               <!-- 💎 課金連携マニュアルボタン -->
               <button type="button" onclick="openMonetizationGuideModal()" class="bg-gradient-to-r from-amber-600 to-yellow-600 hover:opacity-95 text-white px-2 py-1 rounded font-bold text-xs transition flex items-center gap-1 shadow-sm" title="ゲーム内に課金要素を作るための連携ガイド">
@@ -149,6 +153,19 @@
           
           <iframe id="preview-iframe" class="flex-1 w-full h-full border-0 bg-white" tabindex="0" style="outline: none;" allow="accelerometer; autoplay; clipboard-read; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"></iframe>
 
+          <!-- ⚡ シームレス課金HUD通知トースト（ポップアップなしで画面上にスマート表示） -->
+          <div id="seamless-purchase-toast" class="hidden absolute top-12 left-1/2 -translate-x-1/2 bg-[#121622]/95 border border-amber-500/60 text-white px-4 py-2.5 rounded-2xl shadow-2xl flex items-center gap-3 z-50 pointer-events-none transition-all duration-300 transform scale-95 opacity-0">
+            <span class="text-xl shrink-0" id="seamless-toast-icon">✨</span>
+            <div class="min-w-0">
+              <div class="font-black text-xs text-amber-300 flex items-center gap-1.5 truncate" id="seamless-toast-title">
+                シームレス課金完了！
+              </div>
+              <div class="text-[10px] text-slate-300 truncate" id="seamless-toast-body">
+                アイテムを購入しました
+              </div>
+            </div>
+          </div>
+
           <!-- 有料ゲームロック -->
           <div id="lock-overlay" class="hidden absolute inset-0 bg-[#0b0f19]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20">
             <span class="text-5xl mb-3">🔒</span>
@@ -168,6 +185,88 @@
             </p>
             <div id="trial-action-buttons" class="flex flex-col gap-2 w-full max-w-xs">
               <!-- JSで動的にボタン生成 -->
+            </div>
+          </div>
+
+          <!-- 💎 ゲーム画面内シームレス課金決済オーバーレイ（ゲーム画面上に直接HUD表示） -->
+          <div id="ingame-purchase-modal" class="hidden absolute inset-0 bg-black/60 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-3 text-left z-40 transition-all duration-200">
+            <div class="bg-[#181c26]/95 border border-amber-500/60 p-4 sm:p-5 rounded-2xl max-w-sm w-full shadow-2xl text-xs space-y-3 relative overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-150 ring-1 ring-amber-500/20">
+              <!-- 背景グロー -->
+              <div class="absolute -top-10 -right-10 w-28 h-28 bg-amber-500/15 rounded-full blur-xl pointer-events-none"></div>
+
+              <!-- ヘッダー -->
+              <div class="flex justify-between items-center border-b border-[#333] pb-2 relative z-10">
+                <div class="flex items-center gap-2">
+                  <span class="text-xl" id="pay-item-icon">💎</span>
+                  <div>
+                    <h2 class="text-sm font-black text-white flex items-center gap-1.5">
+                      ゲーム内アイテム購入
+                      <span id="pay-item-type" class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-mono">ITEM</span>
+                    </h2>
+                    <p class="text-[10px] text-slate-400">G-HUB 決済システム（G-coin）</p>
+                  </div>
+                </div>
+                <button type="button" id="pay-close-btn" onclick="closeInGamePurchaseModal(true)" class="text-slate-400 hover:text-white text-base px-1.5 py-0.5 rounded transition">✕</button>
+              </div>
+
+              <!-- 商品カード -->
+              <div class="bg-[#12151e] p-3 rounded-xl border border-slate-700/60 space-y-1.5 relative z-10">
+                <div class="flex justify-between items-start gap-2">
+                  <div class="min-w-0 flex-1">
+                    <h3 id="pay-item-name" class="font-black text-sm text-white truncate">アイテム名</h3>
+                    <span id="pay-item-id" class="text-[10px] font-mono text-slate-400 block truncate">item_id</span>
+                  </div>
+                  <div class="text-right shrink-0">
+                    <span class="text-[9px] text-slate-400 block font-bold">価格</span>
+                    <div class="text-lg font-black text-amber-400 font-mono whitespace-nowrap">
+                      💎 <span id="pay-item-price">0</span> G
+                    </div>
+                  </div>
+                </div>
+                <p id="pay-item-desc" class="text-[11px] text-slate-300 leading-relaxed pt-1 border-t border-slate-800">
+                  アイテムの説明文
+                </p>
+              </div>
+
+              <!-- 残高情報 -->
+              <div class="bg-[#12151e] p-3 rounded-xl border border-slate-700/60 space-y-1.5 relative z-10 text-[11px]">
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-400">現在の所持コイン</span>
+                  <span id="pay-user-balance" class="font-black font-mono text-amber-300">0 G</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-400">購入後残高</span>
+                  <span id="pay-balance-after" class="font-black font-mono text-emerald-400">0 G</span>
+                </div>
+
+                <!-- コイン不足メッセージ（チャージチートボタンは一切なし） -->
+                <div id="pay-shortage-alert" class="hidden bg-rose-500/15 border border-rose-500/30 p-2 rounded-lg text-[10px] text-rose-300 mt-1 leading-snug">
+                  ⚠️ コインが不足しています（あと <strong id="pay-shortage-diff" class="font-mono">0 G</strong> 必要）<br>
+                  <span class="text-slate-400 text-[9px]">※コインは毎日のログインボーナス(50G)や自作ゲームの公開で獲得できます。</span>
+                </div>
+              </div>
+
+              <!-- シームレス切替オプション -->
+              <label class="flex items-center gap-2 text-[10px] text-slate-300 cursor-pointer select-none bg-slate-900/40 p-2 rounded-lg border border-slate-800 relative z-10">
+                <input type="checkbox" id="pay-seamless-check" onchange="toggleSeamlessCheckFromModal(this.checked)" class="rounded bg-slate-800 border-slate-600 text-amber-500 focus:ring-0">
+                <span>次回からポップアップなしでシームレスに直接購入する</span>
+              </label>
+
+              <!-- クリエイター還元 -->
+              <div class="text-[9px] text-slate-400 bg-amber-500/5 border border-amber-500/20 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5">
+                <span>🤝</span>
+                <span>売上の80%がゲーム開発者に直接還元されます</span>
+              </div>
+
+              <!-- ボタン（連打防止・多重決済ガード対応） -->
+              <div class="flex gap-2 relative z-10 pt-1">
+                <button type="button" id="pay-confirm-btn" onclick="confirmInGamePurchase()" class="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-95 text-white font-black py-2.5 rounded-xl text-xs shadow-lg transition flex items-center justify-center gap-1.5 cursor-pointer">
+                  <span>💎</span> 購入を確定する
+                </button>
+                <button type="button" id="pay-cancel-btn" onclick="closeInGamePurchaseModal(true)" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-3 py-2.5 rounded-xl text-xs transition">
+                  キャンセル
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -518,94 +617,6 @@
     </div>
   </div>
 
-  <!-- 💎 ゲーム内課金決済モーダル -->
-  <div id="ingame-purchase-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden z-50">
-    <div class="bg-[#1f2430] border border-amber-500/40 p-6 rounded-3xl max-w-md w-full shadow-2xl text-xs space-y-4 relative overflow-hidden">
-      <!-- キラキラ光る背景エフェクト -->
-      <div class="absolute -top-12 -right-12 w-36 h-36 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div>
-      <div class="absolute -bottom-12 -left-12 w-36 h-36 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
-
-      <!-- モーダルヘッダー -->
-      <div class="flex justify-between items-center border-b border-[#333] pb-3 relative z-10">
-        <div class="flex items-center gap-2">
-          <span class="text-xl" id="pay-item-icon">💎</span>
-          <div>
-            <h2 class="text-sm font-black text-white flex items-center gap-2">
-              ゲーム内アイテム購入
-              <span id="pay-item-type" class="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-mono">ITEM</span>
-            </h2>
-            <p class="text-[10px] text-slate-400">G-HUB 決済システム（G-coin）</p>
-          </div>
-        </div>
-        <button type="button" onclick="closeInGamePurchaseModal(true)" class="text-slate-400 hover:text-white text-base">✕</button>
-      </div>
-
-      <!-- 商品情報カード -->
-      <div class="bg-[#161a23] p-4 rounded-2xl border border-slate-700/60 space-y-2 relative z-10">
-        <div class="flex justify-between items-start gap-2">
-          <div>
-            <h3 id="pay-item-name" class="font-black text-base text-white">アイテム名</h3>
-            <span id="pay-item-id" class="text-[10px] font-mono text-slate-400">item_id</span>
-          </div>
-          <div class="text-right">
-            <span class="text-[10px] text-slate-400 block font-bold">価格</span>
-            <div class="text-xl font-black text-amber-400 font-mono">
-              💎 <span id="pay-item-price">0</span> G
-            </div>
-          </div>
-        </div>
-        <p id="pay-item-desc" class="text-[11px] text-slate-300 leading-relaxed pt-1 border-t border-slate-800">
-          アイテムの説明文が表示されます。
-        </p>
-      </div>
-
-      <!-- 所持コインと残高チェック -->
-      <div class="bg-[#161a23] p-3.5 rounded-2xl border border-slate-700/60 space-y-2.5 relative z-10">
-        <div class="flex justify-between items-center text-[11px]">
-          <span class="text-slate-400">現在の所持コイン</span>
-          <span id="pay-user-balance" class="font-black font-mono text-amber-300 text-sm">0 G</span>
-        </div>
-        <div class="flex justify-between items-center text-[11px]">
-          <span class="text-slate-400">購入後の推定残高</span>
-          <span id="pay-balance-after" class="font-black font-mono text-emerald-400 text-sm">0 G</span>
-        </div>
-
-        <!-- コイン不足アラート -->
-        <div id="pay-shortage-alert" class="hidden bg-rose-500/10 border border-rose-500/30 p-2.5 rounded-xl text-[11px] text-rose-300 flex items-center justify-between">
-          <span>⚠️ コインが不足しています (あと <strong id="pay-shortage-diff">0 G</strong>)</span>
-          <button type="button" onclick="quickChargeCoins(100)" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-2 py-1 rounded text-[10px] shadow">
-            ＋100G チャージ
-          </button>
-        </div>
-
-        <!-- クイックチャージリンク -->
-        <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[10px] text-slate-400">
-          <span>コインを追加したい場合:</span>
-          <div class="flex gap-1.5">
-            <button type="button" onclick="quickChargeCoins(100)" class="bg-slate-800 hover:bg-slate-700 text-amber-400 px-2 py-0.5 rounded font-bold transition border border-amber-500/30">＋100 G</button>
-            <button type="button" onclick="quickChargeCoins(500)" class="bg-slate-800 hover:bg-slate-700 text-amber-400 px-2 py-0.5 rounded font-bold transition border border-amber-500/30">＋500 G</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- クリエイター還元通知 -->
-      <div class="text-[10px] text-slate-400 bg-amber-500/5 border border-amber-500/20 p-2 rounded-xl flex items-center gap-2">
-        <span class="text-base">🤝</span>
-        <span>売上の80%はゲーム開発者に直接還元されます（クリエイター応援）</span>
-      </div>
-
-      <!-- ボタン -->
-      <div class="flex gap-2 relative z-10">
-        <button type="button" id="pay-confirm-btn" onclick="confirmInGamePurchase()" class="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-95 text-white font-black py-2.5 rounded-xl text-xs shadow-lg transition flex items-center justify-center gap-1.5 cursor-pointer">
-          <span>💎</span> 購入を確定する
-        </button>
-        <button type="button" onclick="closeInGamePurchaseModal(true)" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-2.5 rounded-xl text-xs transition">
-          キャンセル
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- 📖 ゲーム内課金連携マニュアル モーダル -->
   <div id="monetization-guide-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 hidden z-50">
     <div class="bg-[#1e222d] border border-amber-500/40 p-6 rounded-3xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl text-xs space-y-4">
@@ -651,22 +662,33 @@
 
           <div class="space-y-1.5">
             <h5 class="font-bold text-white flex items-center gap-1.5">
-              <span>1️⃣</span> アイテム課金・購入リクエスト (requestPayment)
+              <span>1️⃣</span> アイテム課金・購入リクエスト (requestPayment & purchaseDirect)
             </h5>
             <pre class="bg-[#0e1117] p-3 rounded-xl font-mono text-[10px] text-emerald-300 border border-slate-800 overflow-x-auto select-all leading-normal">
-// 💎 ポーションや追加ステージをユーザーに購入してもらう
+// 💎 1. 通常の確認HUD付き課金（アイテム詳細をHUD表示してユーザーが確認）
 const result = await window.GHUB.requestPayment({
   itemId: 'potion_heal_max',       // 一意のアイテムID (必須)
-  itemName: 'エリクサー (HP全回復)', // モーダルに表示される商品名 (必須)
+  itemName: 'エリクサー (HP全回復)', // 商品名 (必須)
   price: 50,                       // 価格（G-coin） (必須)
-  consumable: true,                // true = 消費アイテム(何回でも買える) / false = 買い切り
-  description: '全滅寸前でもHPとMPを完全回復する伝説の霊薬' // 説明文 (任意)
+  consumable: true,                // true = 消耗品(何度でも) / false = 買い切り
+  description: '全滅寸前でもHPとMPを完全回復する伝説の霊薬'
 });
+
+// ⚡ 2. 【シームレス課金】ポップアップを開かずゲーム画面から直接即時購入！
+// ゲーム内ショップやバトル中のワンクリック購入に最適
+const quickResult = await window.GHUB.requestPayment({
+  itemId: 'instant_potion',
+  itemName: '即時回復ポーション',
+  price: 20,
+  consumable: true,
+  seamless: true // 👈 seamless: true でポップアップを完全スキップ！
+});
+// または短縮記法:
+// const quickResult = await window.GHUB.purchaseDirect({ itemId: 'instant_potion', price: 20 });
 
 if (result.success) {
   console.log('購入成功！', result.transactionId);
   player.hp = player.maxHp; // ゲーム内でアイテムを付与！
-  alert('エリクサーを購入しました！HPが全回復！');
 } else {
   console.log('購入キャンセルまたはコイン不足:', result.reason);
 }</pre>
@@ -843,8 +865,8 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <button type="button" onclick="testSimulatePayment('test_potion', '🧪 超特急ポーション', 30, true, 'HPを一瞬で全快にするテスト用消耗品')" class="bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/40 p-3 rounded-xl text-left transition flex items-center justify-between">
               <div>
-                <span class="font-bold text-emerald-300 block text-xs">🧪 消耗品テスト (30 G)</span>
-                <span class="text-[10px] text-slate-400">超特急ポーション / 何度でも購入可能</span>
+                <span class="font-bold text-emerald-300 block text-xs">🧪 確認HUD購入テスト (30 G)</span>
+                <span class="text-[10px] text-slate-400">超特急ポーション / 確認HUDを表示</span>
               </div>
               <span class="text-sm font-mono font-bold text-emerald-400">30 G 試す →</span>
             </button>
@@ -856,15 +878,25 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
               </div>
               <span class="text-sm font-mono font-bold text-indigo-400">100 G 試す →</span>
             </button>
+
+            <button type="button" onclick="testSimulateSeamlessPayment('test_potion_seamless', '⚡ 瞬時回復薬 (シームレス)', 20, true, 'ポップアップなしでゲーム画面のまま即時購入')" class="bg-amber-950/60 hover:bg-amber-900/80 border border-amber-500/40 p-3 rounded-xl text-left transition flex items-center justify-between col-span-1 sm:col-span-2">
+              <div>
+                <span class="font-bold text-amber-300 block text-xs">⚡ シームレス直接購入テスト (20 G)</span>
+                <span class="text-[10px] text-slate-400">ポップアップなし！ゲーム画面のままスマートHUD通知のみで即時決済</span>
+              </div>
+              <span class="text-sm font-mono font-bold text-amber-400">20 G シームレス試す →</span>
+            </button>
           </div>
 
-          <div class="flex gap-2">
-            <button type="button" onclick="testSimulateCheckPurchases()" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 p-2 rounded-xl border border-slate-700 text-center font-bold">
+          <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-900/60 border border-slate-800">
+            <button type="button" onclick="testSimulateCheckPurchases()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 font-bold text-xs">
               🔍 現在の所有アイテム一覧を確認
             </button>
-            <button type="button" onclick="quickChargeCoins(100)" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded-xl text-center font-bold whitespace-nowrap">
-              🪙 コインを+100Gチャージ
-            </button>
+            <div class="text-[11px] text-slate-400 flex items-center gap-1.5">
+              <span>🪙 所持残高:</span>
+              <span id="guide-coin-balance-disp" class="font-mono font-bold text-amber-300 text-xs">0 G</span>
+              <span class="text-[10px] text-slate-500 ml-1">（※Gコイン無限チャージ防止適用中）</span>
+            </div>
           </div>
 
           <!-- テスト結果出力ボックス -->
@@ -1140,9 +1172,16 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
                 price: Math.max(0, Math.floor(params.price)),
                 consumable: Boolean(params.consumable),
                 description: String(params.description || ''),
-                icon: String(params.icon || '')
+                icon: String(params.icon || ''),
+                seamless: Boolean(params.seamless)
               }, '*');
             });
+          },
+
+          // ⚡ シームレス直接購入（ポップアップをスキップしてゲーム画面から即時購入）
+          purchaseDirect: function(params) {
+            var opts = Object.assign({}, params || {}, { seamless: true });
+            return window.GHUB.requestPayment(opts);
           },
 
           // 2. 買い切りアイテムの所有チェック (購入済みならアンロック)
@@ -1276,31 +1315,179 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
       }
     }
 
-    // 💎 課金管理・所有アイテム状態
+    // 💎 課金管理・所有アイテム状態 & シームレスモード
     let currentPaymentRequest = null;
     let localOwnedItems = new Set();
+    let isProcessingPurchase = false; // 🔒 連打・多重課金防止ミューテックス
+    let isSeamlessModeEnabled = localStorage.getItem('ghub_seamless_mode') === 'true';
 
     function updateCoinDisplay() {
       const el = document.getElementById('player-coin-display');
       if (el) el.innerText = `${userCoins} G`;
+      const guideCoinEl = document.getElementById('guide-coin-balance-disp');
+      if (guideCoinEl) guideCoinEl.innerText = `${userCoins} G`;
     }
 
-    window.quickChargeCoins = async function(amount = 100) {
-      userCoins += amount;
-      if (currentUser) {
-        try {
-          await supabase.from('profiles').update({ coins: userCoins }).eq('email', currentUser.email);
-        } catch(e) {}
-      } else {
-        localStorage.setItem('ghub_guest_coins', String(userCoins));
+    // ⚡ シームレス課金モード切替
+    function updateSeamlessModeUI() {
+      const btn = document.getElementById('seamless-mode-btn');
+      const label = document.getElementById('seamless-mode-label');
+      if (btn && label) {
+        if (isSeamlessModeEnabled) {
+          btn.className = 'bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 px-2 py-1 rounded font-bold text-xs transition flex items-center gap-1 shadow-sm';
+          label.innerText = 'シームレス: ON';
+        } else {
+          btn.className = 'bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-2 py-1 rounded font-bold text-xs transition flex items-center gap-1 shadow-sm';
+          label.innerText = 'シームレス: OFF';
+        }
       }
-      updateCoinDisplay();
-      log(`🪙 ${amount} G コインをチャージしました！（現在所持: ${userCoins} G）`);
-      const modal = document.getElementById('ingame-purchase-modal');
-      if (modal && !modal.classList.contains('hidden')) {
-        refreshPurchaseModalBalance();
-      }
+      const chk = document.getElementById('pay-seamless-check');
+      if (chk) chk.checked = isSeamlessModeEnabled;
+    }
+
+    window.toggleSeamlessMode = function() {
+      isSeamlessModeEnabled = !isSeamlessModeEnabled;
+      localStorage.setItem('ghub_seamless_mode', String(isSeamlessModeEnabled));
+      updateSeamlessModeUI();
+      log(isSeamlessModeEnabled ? '⚡ シームレス課金モードをONにしました（購入ポップアップを省略しゲーム画面から即時購入）' : 'ℹ️ シームレス課金モードをOFFにしました（確認HUDを表示）');
     };
+
+    window.toggleSeamlessCheckFromModal = function(checked) {
+      isSeamlessModeEnabled = Boolean(checked);
+      localStorage.setItem('ghub_seamless_mode', String(isSeamlessModeEnabled));
+      updateSeamlessModeUI();
+    };
+
+    // ⚡ スマートHUDトースト通知（ポップアップなしで画面上に通知）
+    function showSeamlessToast(icon, title, body, isError = false) {
+      const toast = document.getElementById('seamless-purchase-toast');
+      if (!toast) return;
+      document.getElementById('seamless-toast-icon').innerText = icon || '✨';
+      const titleEl = document.getElementById('seamless-toast-title');
+      if (titleEl) {
+        titleEl.innerText = title;
+        titleEl.className = isError ? 'font-black text-xs text-rose-400 flex items-center gap-1.5 truncate' : 'font-black text-xs text-amber-300 flex items-center gap-1.5 truncate';
+      }
+      const bodyEl = document.getElementById('seamless-toast-body');
+      if (bodyEl) bodyEl.innerText = body;
+
+      toast.classList.remove('hidden');
+      requestAnimationFrame(() => {
+        toast.classList.remove('opacity-0', 'scale-95');
+        toast.classList.add('opacity-100', 'scale-100');
+      });
+
+      clearTimeout(window._seamlessToastTimer);
+      window._seamlessToastTimer = setTimeout(() => {
+        toast.classList.remove('opacity-100', 'scale-100');
+        toast.classList.add('opacity-0', 'scale-95');
+        setTimeout(() => toast.classList.add('hidden'), 300);
+      }, 3000);
+    }
+
+    // ⚡ シームレス直接購入実行（ポップアップなしでゲーム画面から即時決済）
+    async function executeSeamlessPurchase(req) {
+      if (isProcessingPurchase) return;
+      isProcessingPurchase = true;
+
+      const price = Number(req.price) || 0;
+      const itemName = req.itemName || req.itemId;
+      const icon = req.icon || (req.consumable ? '🧪' : '💎');
+
+      try {
+        if (userCoins < price) {
+          const diff = price - userCoins;
+          log(`⚠️ [シームレス課金] コイン不足: 「${itemName}」(${price} G) / 所持: ${userCoins} G`);
+          showSeamlessToast('⚠️', 'コインが不足しています', `「${itemName}」の購入にあと ${diff} G 必要です (所持: ${userCoins} G)`, true);
+          iframe.contentWindow?.postMessage({
+            type: 'GHUB_PAYMENT_FAILED',
+            requestId: req.requestId,
+            itemId: req.itemId,
+            reason: 'insufficient_coins'
+          }, '*');
+          focusIframe();
+          return;
+        }
+
+        // 買い切り重複チェック
+        if (!req.consumable && localOwnedItems.has(req.itemId)) {
+          showSeamlessToast(icon, '購入済みです', `「${itemName}」は既にアンロックされています`);
+          iframe.contentWindow?.postMessage({
+            type: 'GHUB_PAYMENT_SUCCESS',
+            requestId: req.requestId,
+            itemId: req.itemId,
+            itemName: itemName,
+            price: 0,
+            consumable: false,
+            transactionId: 'already_owned',
+            userCoins: userCoins
+          }, '*');
+          focusIframe();
+          return;
+        }
+
+        userCoins -= price;
+        updateCoinDisplay();
+
+        const userEmail = currentUser?.email || localStorage.getItem('ghub_guest_email') || 'guest';
+        if (currentUser) {
+          try {
+            await supabase.from('profiles').update({ coins: userCoins }).eq('email', currentUser.email);
+          } catch(e) {}
+        } else {
+          localStorage.setItem('ghub_guest_coins', String(userCoins));
+        }
+
+        // 作者へ80%還元
+        const authorCut = Math.max(1, Math.round(price * 0.8));
+        if (currentGame && currentGame.author_email) {
+          try {
+            const { data: authorProf } = await supabase.from('profiles').select('coins').eq('email', currentGame.author_email).single();
+            const authorCoins = (authorProf?.coins || 0) + authorCut;
+            await supabase.from('profiles').update({ coins: authorCoins }).eq('email', currentGame.author_email);
+          } catch(e) {}
+        }
+
+        let txId = 'tx_' + Date.now();
+        try {
+          const res = await fetch('/api/ingame-purchases', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              game_id: gameId,
+              user_email: userEmail,
+              item_id: req.itemId,
+              item_name: itemName,
+              price_coins: price,
+              consumable: req.consumable
+            })
+          });
+          if (res.ok) {
+            const resData = await res.json();
+            if (resData.transaction?.id) txId = resData.transaction.id;
+          }
+        } catch (e) {}
+
+        recordItemPurchaseLocally(req.itemId, req.consumable);
+        log(`⚡ [シームレス課金完了] 「${itemName}」(${req.itemId}) を ${price} G で購入しました！`);
+        showSeamlessToast(icon, 'シームレス購入完了！', `「${itemName}」を ${price} G で購入しました (残高: ${userCoins} G)`);
+
+        iframe.contentWindow?.postMessage({
+          type: 'GHUB_PAYMENT_SUCCESS',
+          requestId: req.requestId,
+          itemId: req.itemId,
+          itemName: itemName,
+          price: price,
+          consumable: req.consumable,
+          transactionId: txId,
+          userCoins: userCoins
+        }, '*');
+
+        focusIframe();
+      } finally {
+        isProcessingPurchase = false;
+      }
+    }
 
     async function loadUserPurchasedItems() {
       if (!gameId) return;
@@ -1335,6 +1522,13 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
     }
 
     function openInGamePurchaseModal(req) {
+      if (!req) return;
+      // ⚡ シームレス指定またはシームレスモードONの場合はポップアップを出さずにゲーム画面から即時購入
+      if (req.seamless || isSeamlessModeEnabled) {
+        executeSeamlessPurchase(req);
+        return;
+      }
+
       currentPaymentRequest = req;
       const modal = document.getElementById('ingame-purchase-modal');
       document.getElementById('pay-item-name').innerText = req.itemName || req.itemId;
@@ -1351,6 +1545,9 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
         typeBadge.className = 'text-[9px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-1.5 py-0.5 rounded font-bold font-mono';
         typeBadge.innerText = '💎 買い切り (永続アンロック)';
       }
+
+      const chk = document.getElementById('pay-seamless-check');
+      if (chk) chk.checked = isSeamlessModeEnabled;
 
       refreshPurchaseModalBalance();
       modal.classList.remove('hidden');
@@ -1400,82 +1597,120 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
     };
 
     window.confirmInGamePurchase = async function() {
-      if (!currentPaymentRequest) return;
+      // 🔒 連打・多重課金防止ガード (ポップアップが閉じる前の連打を完全に遮断)
+      if (isProcessingPurchase || !currentPaymentRequest) return;
+      isProcessingPurchase = true;
+
       const req = currentPaymentRequest;
       const price = Number(req.price) || 0;
 
-      if (userCoins < price) {
-        alert(`コインが不足しています。(必要: ${price} G / 所持: ${userCoins} G)`);
-        return;
+      const confirmBtn = document.getElementById('pay-confirm-btn');
+      const cancelBtn = document.getElementById('pay-cancel-btn');
+      const closeBtn = document.getElementById('pay-close-btn');
+
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.classList.add('opacity-50', 'pointer-events-none', 'cursor-not-allowed');
+        confirmBtn.innerHTML = `<span>⏳</span> 決済処理中...`;
+      }
+      if (cancelBtn) {
+        cancelBtn.disabled = true;
+        cancelBtn.classList.add('opacity-50', 'pointer-events-none');
+      }
+      if (closeBtn) {
+        closeBtn.disabled = true;
+        closeBtn.classList.add('pointer-events-none');
       }
 
-      userCoins -= price;
-      updateCoinDisplay();
-
-      const userEmail = currentUser?.email || localStorage.getItem('ghub_guest_email') || 'guest';
-
-      if (currentUser) {
-        try {
-          await supabase.from('profiles').update({ coins: userCoins }).eq('email', currentUser.email);
-        } catch(e) {}
-      } else {
-        localStorage.setItem('ghub_guest_coins', String(userCoins));
-      }
-
-      // 作者へ80%コイン還元
-      const authorCut = Math.max(1, Math.round(price * 0.8));
-      if (currentGame && currentGame.author_email) {
-        try {
-          const { data: authorProf } = await supabase.from('profiles').select('coins').eq('email', currentGame.author_email).single();
-          const authorCoins = (authorProf?.coins || 0) + authorCut;
-          await supabase.from('profiles').update({ coins: authorCoins }).eq('email', currentGame.author_email);
-        } catch(e) {}
-      }
-
-      let txId = 'tx_' + Date.now();
       try {
-        const res = await fetch('/api/ingame-purchases', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            game_id: gameId,
-            user_email: userEmail,
-            item_id: req.itemId,
-            item_name: req.itemName,
-            price_coins: price,
-            consumable: req.consumable
-          })
-        });
-        if (res.ok) {
-          const resData = await res.json();
-          if (resData.transaction?.id) txId = resData.transaction.id;
+        if (userCoins < price) {
+          alert(`コインが不足しています。(必要: ${price} G / 所持: ${userCoins} G)`);
+          return;
         }
-      } catch (e) {}
 
-      recordItemPurchaseLocally(req.itemId, req.consumable);
-      log(`💎 [課金決済完了] 「${req.itemName}」(${req.itemId}) を ${price} G で購入しました！`);
+        userCoins -= price;
+        updateCoinDisplay();
 
-      iframe.contentWindow?.postMessage({
-        type: 'GHUB_PAYMENT_SUCCESS',
-        requestId: req.requestId,
-        itemId: req.itemId,
-        itemName: req.itemName,
-        price: price,
-        consumable: req.consumable,
-        transactionId: txId,
-        userCoins: userCoins
-      }, '*');
+        const userEmail = currentUser?.email || localStorage.getItem('ghub_guest_email') || 'guest';
 
-      const modal = document.getElementById('ingame-purchase-modal');
-      if (modal) modal.classList.add('hidden');
-      currentPaymentRequest = null;
-      focusIframe();
+        if (currentUser) {
+          try {
+            await supabase.from('profiles').update({ coins: userCoins }).eq('email', currentUser.email);
+          } catch(e) {}
+        } else {
+          localStorage.setItem('ghub_guest_coins', String(userCoins));
+        }
+
+        // 作者へ80%コイン還元
+        const authorCut = Math.max(1, Math.round(price * 0.8));
+        if (currentGame && currentGame.author_email) {
+          try {
+            const { data: authorProf } = await supabase.from('profiles').select('coins').eq('email', currentGame.author_email).single();
+            const authorCoins = (authorProf?.coins || 0) + authorCut;
+            await supabase.from('profiles').update({ coins: authorCoins }).eq('email', currentGame.author_email);
+          } catch(e) {}
+        }
+
+        let txId = 'tx_' + Date.now();
+        try {
+          const res = await fetch('/api/ingame-purchases', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              game_id: gameId,
+              user_email: userEmail,
+              item_id: req.itemId,
+              item_name: req.itemName,
+              price_coins: price,
+              consumable: req.consumable
+            })
+          });
+          if (res.ok) {
+            const resData = await res.json();
+            if (resData.transaction?.id) txId = resData.transaction.id;
+          }
+        } catch (e) {}
+
+        recordItemPurchaseLocally(req.itemId, req.consumable);
+        log(`💎 [課金決済完了] 「${req.itemName}」(${req.itemId}) を ${price} G で購入しました！`);
+
+        iframe.contentWindow?.postMessage({
+          type: 'GHUB_PAYMENT_SUCCESS',
+          requestId: req.requestId,
+          itemId: req.itemId,
+          itemName: req.itemName,
+          price: price,
+          consumable: req.consumable,
+          transactionId: txId,
+          userCoins: userCoins
+        }, '*');
+
+        const modal = document.getElementById('ingame-purchase-modal');
+        if (modal) modal.classList.add('hidden');
+        currentPaymentRequest = null;
+        focusIframe();
+      } finally {
+        isProcessingPurchase = false;
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.classList.remove('opacity-50', 'pointer-events-none', 'cursor-not-allowed');
+        }
+        if (cancelBtn) {
+          cancelBtn.disabled = false;
+          cancelBtn.classList.remove('opacity-50', 'pointer-events-none');
+        }
+        if (closeBtn) {
+          closeBtn.disabled = false;
+          closeBtn.classList.remove('pointer-events-none');
+        }
+      }
     };
 
     // 📖 課金連携マニュアル用モーダル操作関数
     window.openMonetizationGuideModal = function() {
       const modal = document.getElementById('monetization-guide-modal');
       if (modal) modal.classList.remove('hidden');
+      updateCoinDisplay();
     };
 
     window.closeMonetizationGuideModal = function() {
@@ -1509,7 +1744,21 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
         itemName: itemName,
         price: price,
         consumable: consumable,
-        description: desc
+        description: desc,
+        seamless: false
+      });
+    };
+
+    window.testSimulateSeamlessPayment = function(itemId, itemName, price, consumable, desc) {
+      closeMonetizationGuideModal();
+      executeSeamlessPurchase({
+        requestId: 'sim_seamless_' + Date.now(),
+        itemId: itemId,
+        itemName: itemName,
+        price: price,
+        consumable: consumable,
+        description: desc,
+        seamless: true
       });
     };
 
@@ -1686,13 +1935,14 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
       } else {
         const guestCoins = localStorage.getItem('ghub_guest_coins');
         if (guestCoins === null) {
-          userCoins = 500;
-          localStorage.setItem('ghub_guest_coins', '500');
+          userCoins = 100; // 登録時初期付与と同等の100G（無限チャージ防止）
+          localStorage.setItem('ghub_guest_coins', '100');
         } else {
-          userCoins = parseInt(guestCoins) || 0;
+          userCoins = Math.max(0, parseInt(guestCoins) || 0);
         }
       }
       updateCoinDisplay();
+      updateSeamlessModeUI();
       loadUserPurchasedItems();
 
       let trialMin = Number(game.trial_duration_minutes) || 0;
@@ -2078,30 +2328,38 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
     }
 
     // 💰 購入処理
+    let isProcessingBuyGame = false;
     window.buyGame = async () => {
+      if (isProcessingBuyGame) return;
       if (!currentUser) return window.location.href = 'index.html';
       if (userCoins < currentGame.price_coins) return alert(`コイン不足！(所持: ${userCoins} G)`);
       if (!confirm(`${currentGame.price_coins} G で購入しますか？`)) return;
 
-      const price = currentGame.price_coins;
+      isProcessingBuyGame = true;
+      try {
+        const price = currentGame.price_coins;
 
-      await supabase.from('profiles').update({ coins: userCoins - price }).eq('email', currentUser.email);
-      await supabase.from('purchases').insert({ user_email: currentUser.email, game_id: gameId });
-      userCoins -= price;
+        await supabase.from('profiles').update({ coins: userCoins - price }).eq('email', currentUser.email);
+        await supabase.from('purchases').insert({ user_email: currentUser.email, game_id: gameId });
+        userCoins -= price;
+        updateCoinDisplay();
 
-      if (currentGame.author_email) {
-        try {
-          const { data: authorProf } = await supabase.from('profiles').select('coins').eq('email', currentGame.author_email).single();
-          const authorCoins = (authorProf?.coins || 0) + price;
-          await supabase.from('profiles').update({ coins: authorCoins }).eq('email', currentGame.author_email);
-        } catch (e) {
-          console.warn('作者コイン加算:', e);
+        if (currentGame.author_email) {
+          try {
+            const { data: authorProf } = await supabase.from('profiles').select('coins').eq('email', currentGame.author_email).single();
+            const authorCoins = (authorProf?.coins || 0) + price;
+            await supabase.from('profiles').update({ coins: authorCoins }).eq('email', currentGame.author_email);
+          } catch (e) {
+            console.warn('作者コイン加算:', e);
+          }
         }
-      }
 
-      alert('🎉 購入完了！作者にコインが支払われました。');
-      document.getElementById('lock-overlay').classList.add('hidden');
-      loadAndRunGame();
+        alert('🎉 購入完了！作者にコインが支払われました。');
+        document.getElementById('lock-overlay').classList.add('hidden');
+        loadAndRunGame();
+      } finally {
+        isProcessingBuyGame = false;
+      }
     };
 
     // 🪙 投げ銭処理
