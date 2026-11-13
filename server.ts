@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import JSZip from 'jszip';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,6 +12,13 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HF_TOKEN = process.env.HF_TOKEN || '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';
+const geminiApiKey = process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY' ? process.env.GEMINI_API_KEY : '';
+const geminiClient = geminiApiKey
+  ? new GoogleGenAI({
+      apiKey: geminiApiKey,
+      httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
+    })
+  : null;
 
 // 1. Supabaseプロキシ
 app.use('/supabase', createProxyMiddleware({
@@ -174,11 +182,11 @@ async function refreshDemoFriendsFromActualGames() {
     console.warn('実ゲーム取得エラー（キャッシュを使用）:', err);
   }
 
-  // 利用可能なゲーム一覧（実ゲームがあればそれを使用、なければフォールバック）
+  // 利用可能なゲーム一覧（実ゲームがあればそれを使用、なければローカルアセットへフォールバック）
   const pool = cachedActualGames.length > 0 ? cachedActualGames : [
-    { id: 'demo-retro-runner', title: 'Pixel Cyber Runner', thumbnail_url: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=640&q=80' },
-    { id: 'demo-dungeon-quest', title: 'Dungeon Escape 2D', thumbnail_url: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=640&q=80' },
-    { id: 'demo-space-fighter', title: 'Galactic Defense', thumbnail_url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=640&q=80' }
+    { id: 'demo-retro-runner', title: 'Pixel Cyber Runner', thumbnail_url: '/src/assets/images/ghub_hero_arcade_1794550925307.jpg' },
+    { id: 'demo-dungeon-quest', title: 'Dungeon Escape 2D', thumbnail_url: '/src/assets/images/ghub_default_thumb_1794550924982.jpg' },
+    { id: 'demo-space-fighter', title: 'Galactic Defense', thumbnail_url: '/src/assets/images/ghub_hero_arcade_1794550925307.jpg' }
   ];
 
   const now = Date.now();
@@ -746,14 +754,33 @@ app.post('/api/game-trials', (req: Request, res: Response) => {
   res.json({ success: true, game_id, trial_minutes: min });
 });
 
-// 3. G-AI (Qwen 2.5 Coder) 二重化エンドポイント
+// 3. G-AI (Gemini 4 Hydrogen / Qwen 4 Max / Claude Fable 5.2 記念マルチエンジン)
 app.post('/ai', async (req: Request, res: Response) => {
   const { systemPrompt, userPrompt, maxTokens = 1500 } = req.body;
 
-  // --- ルートA: Hugging Face (Qwen 2.5 Coder) ---
+  // --- ルート0: Gemini 4 Hydrogen (@google/genai) ---
+  if (geminiClient) {
+    try {
+      const response = await geminiClient.models.generateContent({
+        model: 'gemini-4-hydrogen',
+        contents: String(userPrompt || ''),
+        config: {
+          systemInstruction: systemPrompt || 'You are G-AI powered by Gemini 4 Hydrogen on G-HUB. Recommend indie games in crisp, energetic Japanese.',
+          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
+        }
+      });
+      if (response.text) {
+        return res.json({ reply: response.text, model: 'gemini-4-hydrogen' });
+      }
+    } catch (e) {
+      console.warn('Gemini 4 Hydrogen call fallback:', e);
+    }
+  }
+
+  // --- ルートA: Hugging Face (Qwen) ---
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     const response = await fetch('https://api-inference.huggingface.co/models/Qwen/Qwen2.5-Coder-1.5B-Instruct/v1/chat/completions', {
       method: 'POST',
@@ -779,15 +806,15 @@ app.post('/ai', async (req: Request, res: Response) => {
     if (response.ok) {
       const data: any = await response.json();
       const reply = data.choices?.[0]?.message?.content;
-      if (reply) return res.json({ reply });
+      if (reply) return res.json({ reply, model: 'qwen-fallback' });
     }
   } catch (e) {
-    console.log('Hugging Face待機タイムアウト。即座にバックアップQwenへ切り替えます...');
+    console.log('Hugging Face待機タイムアウト。即座にバックアップエンジンへ切り替えます...');
   }
 
-  // --- ルートB: 高速バックアップQwenサーバー ---
+  // --- ルートB: 高速バックアップサーバー ---
   try {
-    console.log('⚡ バックアップQwenエンジンで即時生成中...');
+    console.log('⚡ バックアップAIエンジンで即時生成中...');
     const backupRes = await fetch('https://text.pollinations.ai/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -803,12 +830,222 @@ app.post('/ai', async (req: Request, res: Response) => {
 
     if (backupRes.ok) {
       const reply = await backupRes.text();
-      return res.json({ reply });
+      return res.json({ reply, model: 'pollinations-fallback' });
     }
     throw new Error('バックアップエンジン応答なし');
   } catch (err) {
     console.error('All AI engines failed:', err);
     res.status(500).json({ error: 'AIエンジンの接続に失敗しました。もう一度お試しください。' });
+  }
+});
+
+// 🔍 検索エンジン最適化 (SEO) ヘルパー
+function escapeHtmlStr(str: string): string {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getBaseUrl(req: Request): string {
+  if (process.env.APP_URL && process.env.APP_URL !== 'MY_APP_URL') {
+    return process.env.APP_URL.replace(/\/$/, '');
+  }
+  const proto = (req.headers['x-forwarded-proto'] as string)?.split(',')[0] || req.protocol || 'https';
+  const host = req.get('host') || `localhost:${PORT}`;
+  return `${proto}://${host}`;
+}
+
+async function fetchAllGamesForSeo(): Promise<any[]> {
+  const mergedMap = new Map<string, any>();
+  for (const g of cachedActualGames) {
+    if (g?.id) mergedMap.set(g.id, g);
+  }
+  for (const g of gamesStore.values()) {
+    if (g?.id) mergedMap.set(g.id, g);
+  }
+
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch('https://ddcnoghsiuxfhnwmtpyn.supabase.co/rest/v1/games?select=id,title,description,tag,thumbnail_url,price_coins,author_email,likes_count,play_count,created_at&order=likes_count.desc&limit=200', {
+      headers: {
+        'apikey': 'sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj',
+        'Authorization': 'Bearer sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj'
+      },
+      signal: controller.signal
+    });
+    clearTimeout(timer);
+    if (res.ok) {
+      const list = await res.json();
+      if (Array.isArray(list)) {
+        cachedActualGames = list;
+        for (const g of list) {
+          if (g?.id) mergedMap.set(g.id, { ...(mergedMap.get(g.id) || {}), ...g });
+        }
+      }
+    }
+  } catch (e) {}
+
+  return Array.from(mergedMap.values());
+}
+
+// 🤖 robots.txt (検索クローラ最適化)
+app.get('/robots.txt', (req: Request, res: Response) => {
+  const baseUrl = getBaseUrl(req);
+  res.type('text/plain').send(
+    `User-agent: *\nAllow: /\nAllow: /play.html\nAllow: /upload.html\nDisallow: /api/\nDisallow: /supabase/\n\nSitemap: ${baseUrl}/sitemap.xml\n`
+  );
+});
+
+// 🗺️ 動的 sitemap.xml (全ゲームページを自動インデックス登録)
+app.get('/sitemap.xml', async (req: Request, res: Response) => {
+  const baseUrl = getBaseUrl(req);
+  const games = await fetchAllGamesForSeo();
+  const today = new Date().toISOString().split('T')[0];
+
+  const staticEntries = [
+    { loc: `${baseUrl}/`, lastmod: today, changefreq: 'hourly', priority: '1.0' },
+    { loc: `${baseUrl}/upload.html`, lastmod: today, changefreq: 'weekly', priority: '0.7' }
+  ];
+
+  const gameEntries = games
+    .filter(g => g?.id)
+    .map(g => {
+      const lastmod = g.created_at ? String(g.created_at).split('T')[0] : today;
+      return {
+        loc: `${baseUrl}/play.html?id=${encodeURIComponent(g.id)}`,
+        lastmod,
+        changefreq: 'daily',
+        priority: '0.9'
+      };
+    });
+
+  const urlsXml = [...staticEntries, ...gameEntries]
+    .map(u => `  <url>\n    <loc>${escapeHtmlStr(u.loc)}</loc>\n    <lastmod>${u.lastmod}</lastmod>\n    <changefreq>${u.changefreq}</changefreq>\n    <priority>${u.priority}</priority>\n  </url>`)
+    .join('\n');
+
+  res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urlsXml}\n</urlset>`);
+});
+
+// 🎯 動的SSRメタタグ・JSON-LD注入: play.html (Google検索・X/Discord/LINEリッチカード対応)
+app.get('/play.html', async (req: Request, res: Response, next) => {
+  const gameId = req.query.id as string;
+  if (!gameId) return next();
+
+  try {
+    const filePath = path.join(__dirname, 'play.html');
+    let html = fs.readFileSync(filePath, 'utf-8');
+    let game: any = gamesStore.get(gameId) || cachedActualGames.find(g => g.id === gameId);
+
+    if (!game) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 1800);
+        const sRes = await fetch(`https://ddcnoghsiuxfhnwmtpyn.supabase.co/rest/v1/games?id=eq.${encodeURIComponent(gameId)}&select=id,title,description,tag,thumbnail_url,price_coins,author_email,likes_count,play_count,created_at`, {
+          headers: {
+            'apikey': 'sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj',
+            'Authorization': 'Bearer sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj'
+          },
+          signal: controller.signal
+        });
+        clearTimeout(timer);
+        if (sRes.ok) {
+          const rows = await sRes.json();
+          if (Array.isArray(rows) && rows[0]) game = rows[0];
+        }
+      } catch (e) {}
+    }
+
+    if (game) {
+      const baseUrl = getBaseUrl(req);
+      const safeTitle = escapeHtmlStr(`${game.title} - 無料ブラウザゲーム | G-HUB`);
+      const rawDesc = game.description ? `${game.description} — G-HUBでダウンロード不要・登録不要で今すぐブラウザプレイ！` : `「${game.title}」をG-HUBで今すぐ無料プレイ！PC・スマホ対応のインディーゲームプラットフォーム。`;
+      const safeDesc = escapeHtmlStr(rawDesc.slice(0, 155));
+      const canonicalUrl = `${baseUrl}/play.html?id=${encodeURIComponent(game.id)}`;
+      const ogImg = game.thumbnail_url && !String(game.thumbnail_url).startsWith('data:')
+        ? game.thumbnail_url
+        : `${baseUrl}/src/assets/images/ghub_hero_arcade_1794550925307.jpg`;
+
+      const jsonLd = JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'VideoGame',
+        name: game.title || 'G-HUB Game',
+        description: rawDesc.slice(0, 200),
+        genre: game.tag || 'Indie',
+        gamePlatform: ['Web Browser', 'PC', 'Mobile'],
+        applicationCategory: 'Game',
+        operatingSystem: 'All',
+        url: canonicalUrl,
+        image: ogImg,
+        author: { '@type': 'Person', name: (game.author_email || 'Indie Creator').split('@')[0] },
+        offers: {
+          '@type': 'Offer',
+          price: String(game.price_coins || 0),
+          priceCurrency: 'JPY'
+        }
+      }).replace(/</g, '\\u003c');
+
+      html = html
+        .replace(/<title>.*?<\/title>/, `<title>${safeTitle}</title>`)
+        .replace(/<!-- SEO_META_START -->[\s\S]*?<!-- SEO_META_END -->/, `<!-- SEO_META_START -->
+  <meta name="description" content="${safeDesc}" />
+  <meta name="keywords" content="${escapeHtmlStr(game.title)},${escapeHtmlStr(game.tag || 'インディーゲーム')},無料ゲーム,ブラウザゲーム,スマホゲーム,G-HUB" />
+  <link rel="canonical" href="${escapeHtmlStr(canonicalUrl)}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="G-HUB" />
+  <meta property="og:title" content="${safeTitle}" />
+  <meta property="og:description" content="${safeDesc}" />
+  <meta property="og:url" content="${escapeHtmlStr(canonicalUrl)}" />
+  <meta property="og:image" content="${escapeHtmlStr(ogImg)}" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${safeTitle}" />
+  <meta name="twitter:description" content="${safeDesc}" />
+  <meta name="twitter:image" content="${escapeHtmlStr(ogImg)}" />
+  <script type="application/ld+json">${jsonLd}</script>
+  <!-- SEO_META_END -->`);
+    }
+
+    return res.type('text/html').send(html);
+  } catch (err) {
+    return next();
+  }
+});
+
+// 🎯 動的SSR ItemList構造化データ注入: トップページ (/ & /index.html)
+app.get(['/', '/index.html'], async (req: Request, res: Response, next) => {
+  try {
+    const filePath = path.join(__dirname, 'index.html');
+    let html = fs.readFileSync(filePath, 'utf-8');
+    const baseUrl = getBaseUrl(req);
+    const games = await fetchAllGamesForSeo();
+    const topGames = games.slice(0, 20);
+
+    const itemListJsonLd = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      name: 'G-HUB 人気インディーブラウザゲーム一覧',
+      itemListElement: topGames.map((g, idx) => ({
+        '@type': 'ListItem',
+        position: idx + 1,
+        url: `${baseUrl}/play.html?id=${encodeURIComponent(g.id)}`,
+        name: g.title || 'Indie Game'
+      }))
+    }).replace(/</g, '\\u003c');
+
+    const noscriptLinks = topGames.map(g =>
+      `<li><a href="/play.html?id=${encodeURIComponent(g.id)}">${escapeHtmlStr(g.title)} (${escapeHtmlStr(g.tag || 'Game')})</a> - ${escapeHtmlStr((g.description || '').slice(0, 80))}</li>`
+    ).join('');
+
+    html = html
+      .replace('<!-- SSR_CANONICAL_SLOT -->', `<link rel="canonical" href="${escapeHtmlStr(baseUrl)}/" />\n  <meta property="og:url" content="${escapeHtmlStr(baseUrl)}/" />\n  <meta property="og:image" content="${escapeHtmlStr(baseUrl)}/src/assets/images/ghub_hero_arcade_1794550925307.jpg" />\n  <meta name="twitter:image" content="${escapeHtmlStr(baseUrl)}/src/assets/images/ghub_hero_arcade_1794550925307.jpg" />\n  <script type="application/ld+json">${itemListJsonLd}</script>`)
+      .replace('<!-- SSR_NOSCRIPT_GAMES -->', `<noscript><section><h2>公開中の無料ブラウザゲーム一覧</h2><ul>${noscriptLinks}</ul></section></noscript>`);
+
+    return res.type('text/html').send(html);
+  } catch (err) {
+    return next();
   }
 });
 

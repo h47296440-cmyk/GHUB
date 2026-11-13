@@ -3,6 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <title>プレイ - G-HUB</title>
+  <!-- SEO_META_START -->
+  <meta name="description" content="G-HUBで無料ブラウザゲームを今すぐプレイ！ダウンロード不要でPC・スマホから即起動できます。" />
+  <meta name="keywords" content="G-HUB,無料ゲーム,ブラウザゲーム,インディーゲーム,HTML5ゲーム,即プレイ" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="G-HUB" />
+  <meta property="og:title" content="プレイ - G-HUB｜無料ブラウザゲーム" />
+  <meta property="og:description" content="ダウンロード不要で今すぐ遊べるインディーゲームプラットフォームG-HUB。" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <!-- SEO_META_END -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -46,13 +55,42 @@
     .pseudo-fullscreen #preview-iframe {
       height: calc(100vh - 40px - env(safe-area-inset-top, 0px)) !important;
     }
+    /* 📱 ショートプレイ用シームレス埋め込みモード (?shorts=1) */
+    body.shorts-embed-mode {
+      padding: 0 !important;
+      background: #000 !important;
+      overflow: hidden !important;
+    }
+    body.shorts-embed-mode .play-header-bar,
+    body.shorts-embed-mode .play-title-row,
+    body.shorts-embed-mode .play-terminal-panel,
+    body.shorts-embed-mode .play-extra-panel {
+      display: none !important;
+    }
+    body.shorts-embed-mode .play-outer-wrap,
+    body.shorts-embed-mode .play-main-grid,
+    body.shorts-embed-mode .play-primary-col {
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      display: block !important;
+      width: 100vw !important;
+      height: 100vh !important;
+    }
+    body.shorts-embed-mode #main-player {
+      width: 100vw !important;
+      height: 100vh !important;
+      aspect-ratio: auto !important;
+      border: none !important;
+      border-radius: 0 !important;
+    }
   </style>
 </head>
 <body class="bg-[#1e1e1e] text-white min-h-screen p-4 font-sans">
-  <div class="max-w-7xl mx-auto">
+  <div class="play-outer-wrap max-w-7xl mx-auto">
     
     <!-- ヘッダー -->
-    <div class="flex justify-between items-center mb-3 pb-3 border-b border-[#333]">
+    <div class="play-header-bar flex flex-wrap justify-between items-center gap-2 mb-3 pb-3 border-b border-[#333]">
       <a href="index.html" class="text-indigo-400 hover:underline font-bold text-xs flex items-center gap-1">
         <span>←</span> トップ一覧へ戻る
       </a>
@@ -67,6 +105,9 @@
       </div>
 
       <div class="flex items-center gap-2 flex-wrap">
+        <button type="button" onclick="jumpToNextGame()" id="next-game-btn" class="bg-gradient-to-r from-amber-500 to-rose-500 hover:opacity-95 text-slate-950 px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1 shadow" title="ワンクリックで別の無料ゲームへ即ジャンプ">
+          <span>🎲</span> 次のゲームへ
+        </button>
         <button onclick="openShareModal()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow">
           <span>🔗</span> 共有
         </button>
@@ -86,12 +127,12 @@
     </div>
 
     <!-- メイングリッド -->
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+    <div class="play-main-grid grid grid-cols-1 lg:grid-cols-4 gap-6">
       
       <!-- ゲーム表示エリア -->
-      <div class="lg:col-span-3 flex flex-col">
+      <div class="play-primary-col lg:col-span-3 flex flex-col">
         <!-- タイトル表示エリア -->
-        <div class="flex flex-wrap items-center gap-3 mb-2">
+        <div class="play-title-row flex flex-wrap items-center gap-3 mb-2">
           <div id="title-thumb-container" class="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 border border-[#444] hidden shrink-0 flex items-center justify-center relative">
             <img id="title-thumb-img" src="" alt="" class="w-full h-full object-cover object-center block" style="object-position: center center;">
           </div>
@@ -272,10 +313,10 @@
         </div>
 
         <!-- ログターミナル -->
-        <div class="mt-3 bg-[#0e0e0e] text-[#4af626] font-mono text-[11px] p-2.5 rounded-xl border border-[#333] h-20 overflow-y-auto whitespace-pre-wrap" id="terminal">--- ゲームエンジン ログ ---<br></div>
+        <div class="play-terminal-panel mt-3 bg-[#0e0e0e] text-[#4af626] font-mono text-[11px] p-2.5 rounded-xl border border-[#333] h-20 overflow-y-auto whitespace-pre-wrap" id="terminal">--- ゲームエンジン ログ ---<br></div>
 
         <!-- 説明 ＆ スコア登録 -->
-        <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div class="play-extra-panel mt-3 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
           <div class="bg-[#252526] p-4 rounded-xl border border-[#333]">
             <h2 class="font-bold text-indigo-400 mb-1">📋 操作方法・説明</h2>
             <p id="game-desc" class="text-slate-300 whitespace-pre-wrap leading-relaxed">説明はありません。</p>
@@ -292,7 +333,7 @@
         </div>
 
         <!-- 📢 アップデート履歴セクション -->
-        <div class="mt-4 bg-[#252526] p-4 rounded-xl border border-[#333] text-xs">
+        <div class="play-extra-panel mt-4 bg-[#252526] p-4 rounded-xl border border-[#333] text-xs">
           <div class="flex justify-between items-center border-b border-[#333] pb-2 mb-3">
             <h2 class="font-bold text-indigo-400 flex items-center gap-1.5 text-sm">
               📢 アップデート履歴
@@ -305,7 +346,7 @@
         </div>
 
         <!-- ⭐ レビュー・評価セクション -->
-        <div class="mt-4 bg-[#252526] p-5 rounded-xl border border-[#333] text-xs">
+        <div class="play-extra-panel mt-4 bg-[#252526] p-5 rounded-xl border border-[#333] text-xs">
           <div class="flex flex-wrap justify-between items-center border-b border-[#333] pb-3 mb-4">
             <div class="flex items-center gap-3">
               <h2 class="font-black text-sm text-amber-400 flex items-center gap-1">
@@ -352,7 +393,7 @@
       </div>
 
       <!-- 右サイドバー（ランキング ＆ チャット） -->
-      <div class="lg:col-span-1 space-y-4 text-xs">
+      <div class="play-extra-panel lg:col-span-1 space-y-4 text-xs">
         <div class="bg-[#252526] border border-[#333] rounded-xl p-4 h-[220px] flex flex-col">
           <h2 class="font-bold text-yellow-400 border-b border-[#333] pb-2 mb-2">🏆 ランキング</h2>
           <div id="leaderboard-list" class="flex-1 overflow-y-auto space-y-1 font-mono"></div>
@@ -923,9 +964,59 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
     const supabase = window.supabase.createClient(proxyUrl, 'sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj');
     const urlParams = new URLSearchParams(window.location.search);
     const gameId = urlParams.get('id');
+    const isShortsMode = urlParams.get('shorts') === '1';
+    if (isShortsMode) {
+      document.body.classList.add('shorts-embed-mode');
+    }
     if (urlParams.get('guide') === 'monetization') {
       setTimeout(() => openMonetizationGuideModal(), 300);
     }
+
+    // 🎲 ワンクリックで次のゲームへ即ジャンプ
+    window.jumpToNextGame = async function() {
+      const btn = document.getElementById('next-game-btn');
+      if (btn) btn.disabled = true;
+      try {
+        let pool = [];
+        try {
+          const { data } = await supabase.from('games').select('id,title,price_coins').limit(80);
+          if (Array.isArray(data)) pool = data;
+        } catch (e) {}
+        try {
+          const sRes = await fetch('/api/games');
+          if (sRes.ok) {
+            const sGames = await sRes.json();
+            if (Array.isArray(sGames)) {
+              sGames.forEach(sg => {
+                if (sg?.id && !pool.some(p => p.id === sg.id)) pool.push(sg);
+              });
+            }
+          }
+        } catch (e) {}
+        try {
+          const lGames = JSON.parse(localStorage.getItem('ghub_local_games') || '[]');
+          if (Array.isArray(lGames)) {
+            lGames.forEach(lg => {
+              if (lg?.id && !pool.some(p => p.id === lg.id)) pool.push(lg);
+            });
+          }
+        } catch (e) {}
+
+        const candidates = pool.filter(g => g?.id && g.id !== gameId);
+        const freeCandidates = candidates.filter(g => !(g.price_coins > 0));
+        const pickPool = freeCandidates.length > 0 ? freeCandidates : candidates;
+        if (!pickPool.length) {
+          alert('他にジャンプ可能なゲームが見つかりませんでした。');
+          return;
+        }
+        const chosen = pickPool[Math.floor(Math.random() * pickPool.length)];
+        const prevCombo = parseInt(localStorage.getItem('ghub_play_combo') || '0', 10) || 0;
+        localStorage.setItem('ghub_play_combo', String(prevCombo + 1));
+        window.location.href = `play.html?id=${encodeURIComponent(chosen.id)}${isShortsMode ? '&shorts=1' : ''}`;
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    };
 
     const terminal = document.getElementById('terminal');
     const iframe = document.getElementById('preview-iframe');
@@ -1899,6 +1990,33 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
 
       if (!game) return alert('ゲームが見つかりませんでした');
       currentGame = game;
+
+      // 🔍 クライアント側動的SEO補強 (タイトル・説明・JSON-LD)
+      try {
+        document.title = `${game.title} - 無料ブラウザゲーム | G-HUB`;
+        const metaDesc = document.querySelector('meta[name="description"]');
+        if (metaDesc && game.description) {
+          metaDesc.setAttribute('content', `${game.description} — G-HUBで今すぐブラウザプレイ！`.slice(0, 155));
+        }
+        if (!document.querySelector('script[data-ghub-videogame-ld]')) {
+          const ld = document.createElement('script');
+          ld.type = 'application/ld+json';
+          ld.setAttribute('data-ghub-videogame-ld', '1');
+          ld.textContent = JSON.stringify({
+            '@context': 'https://schema.org',
+            '@type': 'VideoGame',
+            name: game.title,
+            description: game.description || `${game.title} — G-HUBで遊べる無料ブラウザゲーム`,
+            genre: game.tag || 'Indie',
+            gamePlatform: ['Web Browser', 'PC', 'Mobile'],
+            applicationCategory: 'Game',
+            operatingSystem: 'All',
+            url: window.location.href,
+            offers: { '@type': 'Offer', price: String(game.price_coins || 0), priceCurrency: 'JPY' }
+          });
+          document.head.appendChild(ld);
+        }
+      } catch (e) {}
 
       recordRecentPlay(gameId);
 
