@@ -13,6 +13,7 @@
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.json">
+  <script src="/ghub-pwa.js"></script>
   <title>ゲーム投稿・ブラウザ公開 - G-HUB | 自作HTML/Reactゲームを即公開</title>
   <meta name="description" content="自作のHTML5・React・Vite・Next.jsインディーゲームをそのままブラウザで無料公開！G-coin課金連携や体験版タイマーも簡単設定できるG-HUB公式アップローダー。" />
   <meta name="keywords" content="インディーゲーム公開,HTML5ゲーム投稿,ブラウザゲームアップロード,Reactゲーム公開,G-HUB" />
@@ -49,7 +50,11 @@
       <h1 class="text-xl font-bold text-white flex items-center gap-2">
         📦 G-HUB Uploader (.zip ＆ .html 対応 / Vite & Next.js Engine v9)
       </h1>
-      <a href="index.html" class="text-xs text-indigo-400 hover:underline">← トップへ戻る</a>
+      <div class="flex items-center gap-3">
+        <a href="pwa.html" class="bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-xs font-bold px-3 py-1.5 rounded-lg transition">📲 PWA版</a>
+        <a href="studio.html" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">🛠️ Studioでコードを書く</a>
+        <a href="index.html" class="text-xs text-indigo-400 hover:underline">← トップへ戻る</a>
+      </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -361,6 +366,94 @@
       if (e.target.files.length > 0) handleFile(e.target.files[0]);
     });
 
+    const UPLOADER_AI_RUNTIME = `
+      (function() {
+        window.GHUB = window.GHUB || { _pendingRequests: {} };
+        window.GHUB.askAI = function(prompt, systemPrompt, options) {
+          var opts = options || {};
+          return new Promise(function(resolve) {
+            var reqId = 'up_ai_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+            window.GHUB._pendingRequests[reqId] = { resolve: resolve };
+            window.parent.postMessage({
+              type: 'GHUB_AI_REQUEST',
+              requestId: reqId,
+              userPrompt: typeof prompt === 'string' ? prompt : JSON.stringify(prompt || ''),
+              systemPrompt: typeof systemPrompt === 'string' ? systemPrompt : '',
+              maxTokens: opts.maxTokens || 1500
+            }, '*');
+          });
+        };
+        if (typeof window.fetch === 'function' && window.parent && window.parent !== window) {
+          var _origFetch = window.fetch.bind(window);
+          window.fetch = function(input, init) {
+            try {
+              var urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+              if (/^(\\/ai|\\/api\\/ai|\\/api\\/gemini(\\/generate)?)$/i.test(urlStr)) {
+                var parsed = {};
+                if (init && typeof init.body === 'string') {
+                  try { parsed = JSON.parse(init.body); } catch (e) { parsed = { userPrompt: init.body }; }
+                }
+                return window.GHUB.askAI(parsed.userPrompt || parsed.prompt || parsed.contents || '', parsed.systemPrompt || parsed.systemInstruction || '')
+                  .then(function(aiRes) {
+                    return new Response(JSON.stringify({ reply: aiRes.reply || '', text: aiRes.reply || '', model: aiRes.model || 'ghub-ai' }), {
+                      status: 200,
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                  });
+              }
+            } catch (e) {}
+            return _origFetch(input, init);
+          };
+        }
+        window.addEventListener('message', function(e) {
+          if (e.data && e.data.type === 'GHUB_AI_RESPONSE') {
+            var req = window.GHUB._pendingRequests[e.data.requestId];
+            if (req) {
+              delete window.GHUB._pendingRequests[e.data.requestId];
+              req.resolve({ reply: e.data.reply || '', text: e.data.reply || '', model: e.data.model || 'ghub-ai' });
+            }
+          }
+        });
+      })();
+    `;
+
+    function injectUploaderBridge(htmlStr) {
+      const tag = `<script>${UPLOADER_AI_RUNTIME}<\/script>`;
+      if (htmlStr.includes('<head>')) return htmlStr.replace('<head>', '<head>' + tag);
+      if (htmlStr.includes('<head ')) return htmlStr.replace(/<head[^>]*>/, '$&' + tag);
+      return tag + htmlStr;
+    }
+
+    window.addEventListener('message', (e) => {
+      if (!e.data || e.data.type !== 'GHUB_AI_REQUEST') return;
+      fetch('/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userPrompt: e.data.userPrompt || '',
+          systemPrompt: e.data.systemPrompt || '',
+          maxTokens: e.data.maxTokens || 1500
+        })
+      })
+        .then(r => r.json())
+        .then(data => {
+          iframe.contentWindow?.postMessage({
+            type: 'GHUB_AI_RESPONSE',
+            requestId: e.data.requestId,
+            reply: data.reply || data.text || '',
+            model: data.model || 'ghub-ai'
+          }, '*');
+        })
+        .catch(() => {
+          iframe.contentWindow?.postMessage({
+            type: 'GHUB_AI_RESPONSE',
+            requestId: e.data.requestId,
+            reply: '⚠️ AI接続に失敗しました。',
+            model: 'fallback'
+          }, '*');
+        });
+    });
+
     async function handleFile(file) {
       if (!file) return;
 
@@ -368,7 +461,7 @@
         log(`\n📄 単一HTMLファイルを検出: ${file.name}`);
         document.getElementById('game-title').value = file.name.replace('.html', '');
         const htmlText = await file.text();
-        iframe.srcdoc = htmlText;
+        iframe.srcdoc = injectUploaderBridge(htmlText);
         finalPayload = new Blob([htmlText], { type: 'text/html' });
         payloadType = 'html';
         log('🚀 プレビュー描画完了！');
@@ -470,6 +563,7 @@
               }
 
               let pkg = args.path;
+              if (pkg === '@google/genai') return { path: 'upload-genai-shim', namespace: 'upload-shim' };
               if (pkg === 'react') return { path: 'https://esm.sh/react@18.2.0?dev', external: true };
               if (pkg === 'react-dom') return { path: 'https://esm.sh/react-dom@18.2.0?dev', external: true };
               if (pkg === 'react-dom/client') return { path: 'https://esm.sh/react-dom@18.2.0/client?dev', external: true };
@@ -477,6 +571,42 @@
               
               return { path: `https://esm.sh/${pkg}?deps=react@18.2.0,react-dom@18.2.0&dev`, external: true };
             });
+
+            build.onLoad({ filter: /.*/, namespace: 'upload-shim' }, () => ({
+              contents: `
+                export const ThinkingLevel = { LOW: 'LOW', MEDIUM: 'MEDIUM', HIGH: 'HIGH' };
+                export const Type = { STRING: 'STRING', NUMBER: 'NUMBER', INTEGER: 'INTEGER', BOOLEAN: 'BOOLEAN', ARRAY: 'ARRAY', OBJECT: 'OBJECT' };
+                function _ex(c){if(!c)return'';if(typeof c==='string')return c;if(Array.isArray(c))return c.map(x=>typeof x==='string'?x:(x?.text||(x?.parts?x.parts.map(p=>p?.text||'').join('\\n'):JSON.stringify(x)))).join('\\n');if(typeof c==='object')return c.text||(c.parts?c.parts.map(p=>p?.text||'').join('\\n'):JSON.stringify(c));return String(c);}
+                export class GoogleGenAI {
+                  constructor(){}
+                  get models(){
+                    const self=this;
+                    return {
+                      generateContent: async (params={})=>{
+                        const p=_ex(params.contents||params.prompt||'');
+                        const s=_ex(params?.config?.systemInstruction||'');
+                        let reply='';
+                        if(window.GHUB&&typeof window.GHUB.askAI==='function'){
+                          const res=await window.GHUB.askAI(p,s);
+                          reply=(res&&(res.reply||res.text))||'';
+                        }else{
+                          const r=await fetch('/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userPrompt:p,systemPrompt:s})});
+                          const d=await r.json();
+                          reply=d.reply||d.text||'';
+                        }
+                        return { text: reply, response: { text: () => reply } };
+                      },
+                      generateContentStream: async (params={})=>{
+                        const out=await self.models.generateContent(params);
+                        return (async function*(){ yield { text: out.text }; })();
+                      }
+                    };
+                  }
+                }
+                export default GoogleGenAI;
+              `,
+              loader: 'js'
+            }));
 
             build.onLoad({ filter: /.*/, namespace: 'zip-vfs' }, args => {
               let content = files[args.path];
@@ -611,6 +741,10 @@
         doc.querySelectorAll('script[type="module"]').forEach(s => s.remove());
         doc.body.appendChild(scriptEl);
 
+        const bridgeEl = doc.createElement('script');
+        bridgeEl.textContent = UPLOADER_AI_RUNTIME;
+        head.insertBefore(bridgeEl, head.firstChild);
+
         const finalHtml = doc.documentElement.outerHTML;
         iframe.srcdoc = finalHtml;
         finalPayload = new Blob([finalHtml], { type: 'text/html' });
@@ -657,12 +791,38 @@
       try {
         const gameId = crypto.randomUUID();
         const filename = payloadType === 'html' ? 'index.html' : 'game.zip';
+        let entryUrl = `/api/games/payload/${encodeURIComponent(gameId)}`;
 
-        await supabase.storage.from('games').upload(`${gameId}/${filename}`, finalPayload, {
-          contentType: payloadType === 'html' ? 'text/html' : 'application/zip',
-          upsert: true
-        });
-        const entryUrl = supabase.storage.from('games').getPublicUrl(`${gameId}/${filename}`).data.publicUrl;
+        try {
+          await supabase.storage.from('games').upload(`${gameId}/${filename}`, finalPayload, {
+            contentType: payloadType === 'html' ? 'text/html' : 'application/zip',
+            upsert: true
+          });
+          const pubUrl = supabase.storage.from('games').getPublicUrl(`${gameId}/${filename}`).data.publicUrl;
+          if (pubUrl) entryUrl = pubUrl;
+        } catch (e) {}
+
+        // サーバーへもペイロードを確実にバックアップ保存（オフラインPWA保存＆AIゲーム安定動作用）
+        try {
+          if (payloadType === 'html') {
+            const textData = await finalPayload.text();
+            await fetch('/api/games/payload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ game_id: gameId, filename, contentType: 'text/html', textData })
+            });
+          } else {
+            const ab = await finalPayload.arrayBuffer();
+            const bytes = new Uint8Array(ab);
+            let bin = '';
+            for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
+            await fetch('/api/games/payload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ game_id: gameId, filename, contentType: 'application/zip', base64Data: btoa(bin) })
+            });
+          }
+        } catch (e) {}
 
         let thumbnailUrl = null;
         if (capturedThumbnailBlob) {

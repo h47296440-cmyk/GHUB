@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="bg4" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#06141b"/>
+      <stop offset="100%" stop-color="#0f3d3e"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#bg4)"/>
+  <rect x="80" y="75" width="480" height="230" rx="20" fill="#0b1320" stroke="#10b981" stroke-width="3"/>
+  <circle cx="170" cy="165" r="42" fill="#064e3b" stroke="#34d399" stroke-width="3"/>
+  <text x="170" y="177" text-anchor="middle" fill="#6ee7b7" font-family="monospace" font-weight="900" font-size="28">AI</text>
+  <rect x="240" y="128" width="280" height="22" rx="6" fill="#1e293b"/>
+  <rect x="240" y="164" width="230" height="16" rx="6" fill="#1e293b"/>
+  <rect x="240" y="196" width="260" height="34" rx="10" fill="#10b981"/>
+  <rect x="240" y="240" width="260" height="34" rx="10" fill="#334155"/>
+  <text x="370" y="218" text-anchor="middle" fill="#022c22" font-family="sans-serif" font-weight="900" font-size="14">⚔️ AIと未知の選択に挑む</text>
+  <text x="320" y="50" text-anchor="middle" fill="#a7f3d0" font-family="sans-serif" font-weight="900" font-size="22">AI ENDLESS DUNGEON</text>
+</svg>

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#050814"/>
+      <stop offset="100%" stop-color="#31102f"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#bg2)"/>
+  <g stroke="#334155" stroke-width="1" opacity="0.35">
+    <line x1="0" y1="90" x2="640" y2="90"/><line x1="0" y1="180" x2="640" y2="180"/><line x1="0" y1="270" x2="640" y2="270"/>
+    <line x1="160" y1="0" x2="160" y2="360"/><line x1="320" y1="0" x2="320" y2="360"/><line x1="480" y1="0" x2="480" y2="360"/>
+  </g>
+  <circle cx="320" cy="185" r="78" fill="none" stroke="#22d3ee" stroke-width="3" stroke-dasharray="18 10" opacity="0.8"/>
+  <circle cx="320" cy="185" r="18" fill="#38bdf8" stroke="#ffffff" stroke-width="3"/>
+  <circle cx="398" cy="185" r="10" fill="#22d3ee"/>
+  <circle cx="242" cy="185" r="10" fill="#22d3ee"/>
+  <polygon points="150,110 175,135 140,150" fill="#f43f5e"/>
+  <polygon points="480,105 510,125 475,148" fill="#f43f5e"/>
+  <polygon points="175,260 205,270 185,295" fill="#fb7185"/>
+  <polygon points="465,255 495,275 458,290" fill="#fb7185"/>
+  <circle cx="235" cy="135" r="5" fill="#facc15"/>
+  <circle cx="420" cy="145" r="5" fill="#facc15"/>
+  <circle cx="265" cy="245" r="5" fill="#34d399"/>
+  <text x="320" y="54" text-anchor="middle" fill="#f8fafc" font-family="sans-serif" font-weight="900" font-size="24">ORBIT SURVIVOR 30s</text>
+</svg>

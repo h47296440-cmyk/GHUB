@@ -2,13 +2,33 @@
   "id": "/",
   "name": "G-HUB - Indie Gaming Platform",
   "short_name": "G-HUB",
-  "description": "Indie Gaming Platform for uploading, playing, and sharing indie games.",
+  "description": "Indie Gaming Platform for creating, uploading, playing offline, and sharing indie games.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0b0f19",
   "theme_color": "#0b0f19",
   "orientation": "any",
+  "shortcuts": [
+    {
+      "name": "G-HUB Studio",
+      "short_name": "Studio",
+      "description": "コードを書いてすぐテスト＆公開できるゲーム開発スタジオ",
+      "url": "/studio.html"
+    },
+    {
+      "name": "PWAダウンロード＆オフライン管理",
+      "short_name": "PWA保存",
+      "description": "アプリ化とオフライン用ゲームのまとめダウンロード",
+      "url": "/pwa.html"
+    },
+    {
+      "name": "オフライン保存済みゲーム",
+      "short_name": "Offline",
+      "description": "ダウンロード済みのゲームをオフラインでプレイ",
+      "url": "/?tab=offline"
+    }
+  ],
   "icons": [
     {
       "src": "/favicon.svg",

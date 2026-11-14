@@ -13,6 +13,7 @@
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.json">
+  <script src="/ghub-pwa.js"></script>
 
   <title>G-HUB｜無料ブラウザゲーム＆インディーゲーム投稿・即プレイプラットフォーム</title>
   <meta name="description" content="ダウンロード不要・登録不要で今すぐ遊べる無料ブラウザゲーム＆インディーゲーム投稿プラットフォームG-HUB。Gemini 4 Hydrogen搭載AIゲーム推薦、ショートプレイ、オフライン保存対応。" />
@@ -132,16 +133,29 @@
         </a>
 
         <nav aria-label="メインナビゲーション" class="hidden md:flex items-center gap-5 text-xs font-bold text-slate-600 dark:text-slate-300">
+          <a href="#trending-games-section" class="hover:text-amber-500 dark:hover:text-amber-400 transition whitespace-nowrap shrink-0 flex items-center gap-1">
+            <span>🔥</span> トレンド
+          </a>
           <a href="#catalog-section" class="hover:text-indigo-500 dark:hover:text-indigo-400 transition whitespace-nowrap shrink-0">カタログ</a>
+          <a href="studio.html" class="hover:text-emerald-500 dark:hover:text-emerald-400 transition whitespace-nowrap shrink-0 flex items-center gap-1">
+            <span>🛠️</span> Studio
+          </a>
+          <a href="pwa.html" class="hover:text-cyan-500 dark:hover:text-cyan-400 transition whitespace-nowrap shrink-0 flex items-center gap-1">
+            <span>📲</span> PWAダウンロード
+          </a>
           <button type="button" onclick="openShortsFeed()" class="hover:text-amber-500 dark:hover:text-amber-400 transition whitespace-nowrap shrink-0 flex items-center gap-1">
             <span>📱</span> ショートプレイ
           </button>
           <button type="button" onclick="jumpToRanking()" class="hover:text-indigo-500 dark:hover:text-indigo-400 transition whitespace-nowrap shrink-0">ランキング</button>
+          <a href="#community-lobby-section" class="hover:text-indigo-500 dark:hover:text-indigo-400 transition whitespace-nowrap shrink-0">広場ロビー</a>
           <a href="profile.html" class="hover:text-indigo-500 dark:hover:text-indigo-400 transition whitespace-nowrap shrink-0">マイページ</a>
         </nav>
       </div>
 
       <div class="flex items-center gap-2 text-xs font-semibold flex-wrap justify-end">
+        <a href="pwa.html" class="bg-cyan-50 dark:bg-cyan-950/50 border border-cyan-200 dark:border-cyan-500/40 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100 dark:hover:bg-cyan-900/60 px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1 whitespace-nowrap shrink-0">
+          <span>📲</span> PWA保存
+        </a>
         <button id="pwa-install-btn" onclick="handlePWAInstallClick()" class="hidden bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 shadow-sm whitespace-nowrap shrink-0">
           <span>📲</span> アプリ化
         </button>
@@ -176,6 +190,10 @@
             ログイン
           </button>
         </div>
+
+        <a href="studio.html" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 rounded-xl font-bold shadow-sm transition whitespace-nowrap shrink-0 flex items-center gap-1">
+          <span>🛠️</span> Studio
+        </a>
 
         <a href="upload.html" class="bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-95 text-white px-4 py-2 rounded-xl font-bold shadow-md shadow-indigo-500/20 transition whitespace-nowrap shrink-0">
           ＋ 公開する
@@ -242,6 +260,9 @@
             <button type="button" onclick="openShortsFeed()" class="bg-slate-900 dark:bg-indigo-600 hover:opacity-95 active:scale-[0.98] text-white font-bold px-5 py-3 rounded-2xl text-sm shadow-md transition flex items-center gap-2 cursor-pointer">
               <span>📱</span> ショートプレイで次々遊ぶ
             </button>
+            <a href="studio.html" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-3 rounded-2xl text-sm shadow-md transition flex items-center gap-2 whitespace-nowrap">
+              <span>🛠️</span> GHUB Studioで作る
+            </a>
           </div>
         </div>
 
@@ -283,6 +304,65 @@
             </a>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- 🟢 リアルタイム広場パルス & 今週のStudioジャム（過疎解消） -->
+    <section id="community-pulse-section" aria-label="リアルタイム広場" class="bg-white dark:bg-[#101624] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 shadow-sm space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 flex-wrap">
+          <span class="inline-flex items-center gap-1.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-600 dark:text-emerald-300 text-xs font-black px-2.5 py-1 rounded-lg font-mono">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>LIVE</span>
+          </span>
+          <h2 class="font-display font-extrabold text-sm text-slate-900 dark:text-white">
+            いま <span id="pulse-online-count" class="text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">--</span> 人がG-HUBでプレイ中
+          </h2>
+          <span class="text-[11px] text-slate-400 hidden sm:inline">誰かが遊んでいるゲームにワンクリックで合流できます</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <a href="#community-lobby-section" class="text-indigo-600 dark:text-indigo-400 hover:underline font-bold">💬 広場ロビー・リクエストへ ↓</a>
+        </div>
+      </div>
+
+      <div id="pulse-active-players" class="flex gap-2.5 overflow-x-auto no-scrollbar pb-1">
+        <div class="text-xs text-slate-400 font-mono py-2">リアルタイム接続状況を取得中...</div>
+      </div>
+
+      <div class="bg-gradient-to-r from-indigo-50 via-emerald-50/70 to-amber-50/70 dark:from-indigo-950/50 dark:via-emerald-950/30 dark:to-amber-950/30 border border-indigo-200/80 dark:border-indigo-500/30 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+          <span id="pulse-jam-badge" class="text-[10px] font-mono font-black text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">🏆 WEEKLY STUDIO JAM</span>
+          <h3 id="pulse-jam-title" class="font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate">10秒で脳汁！ハイテンポ・ブラウザミニゲーム祭り</h3>
+          <p id="pulse-jam-desc" class="text-[11px] text-slate-600 dark:text-slate-300 truncate">GHUB Studioでテンプレート編集やAI生成してそのまま公開・投稿しよう！</p>
+        </div>
+        <a id="pulse-jam-link" href="studio.html?prompt=10%E7%A7%92%E9%96%93%E3%81%A7%E9%80%A3%E7%B6%9A%E3%82%B3%E3%83%B3%E3%83%9C%E3%81%A8%E7%88%86%E7%99%BA%E3%82%A8%E3%83%95%E3%82%A7%E3%82%AF%E3%83%88%E3%81%8C%E7%88%BD%E5%BF%AB%E3%81%AA%E3%83%AF%E3%83%B3%E3%82%BF%E3%83%83%E3%83%97%E3%83%9F%E3%83%8B%E3%82%B2%E3%83%BC%E3%83%A0" class="shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-3.5 py-2 rounded-xl shadow-sm transition whitespace-nowrap">
+          🛠️ このお題でStudio制作 →
+        </a>
+      </div>
+    </section>
+
+    <!-- 🔥 今のトレンドゲーム (2026 TRENDING NOW) -->
+    <section id="trending-games-section" aria-label="今のトレンドゲーム" class="bg-white dark:bg-[#101624] border border-amber-300/60 dark:border-amber-500/30 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2.5">
+          <span class="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-slate-950 font-black text-[11px] font-mono shadow-sm">TRENDING 2026</span>
+          <div>
+            <h2 class="font-display text-base sm:text-lg font-extrabold text-slate-900 dark:text-white leading-tight">🔥 今のトレンドゲーム（PC・スマホ・オフライン即プレイ）</h2>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">スイカ系マージ・ネオン弾幕サバイバー・10秒脳汁クリッカー・AI生成RPGを今すぐプレイ＆PWA保存</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" id="home-batch-pwa-btn" onclick="saveAllTrendingToPwa()" class="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs px-3.5 py-2 rounded-xl shadow-sm transition cursor-pointer whitespace-nowrap">
+            ✈️ トレンド一括PWA保存
+          </button>
+          <a href="pwa.html" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 transition whitespace-nowrap">
+            📲 PWAダウンロードページ →
+          </a>
+        </div>
+      </div>
+
+      <div id="trending-games-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="col-span-full text-xs text-slate-400 font-mono py-4 text-center">トレンドゲームを読み込み中...</div>
       </div>
     </section>
 
@@ -346,10 +426,12 @@
       <div class="flex flex-col md:flex-row justify-between items-center gap-3">
         <div class="flex gap-1.5 overflow-x-auto no-scrollbar w-full md:w-auto pb-1 md:pb-0" id="tag-filters">
           <button onclick="selectTab('all', this)" class="tag-btn active px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-sm transition whitespace-nowrap">すべて</button>
+          <button id="tab-trending-btn" onclick="selectTab('trending', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">🔥 トレンド</button>
           <button id="tab-quick-btn" onclick="selectTab('quick', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">⚡ サクッと即遊び</button>
           <button onclick="selectTab('new', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">🆕 新作</button>
-          <button id="tab-ranking-btn" onclick="selectTab('ranking', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">🔥 ランキング</button>
+          <button id="tab-ranking-btn" onclick="selectTab('ranking', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">👑 ランキング</button>
           <button onclick="selectTab('recent', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">🕒 履歴</button>
+          <button id="tab-offline-btn" onclick="selectTab('offline', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">📥 保存済み (<span id="offline-saved-count">0</span>)</button>
           <button onclick="selectTab('free', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">🆓 無料</button>
           <button onclick="selectTag('Action', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">アクション</button>
           <button onclick="selectTag('Puzzle', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">パズル</button>
@@ -373,13 +455,47 @@
       </div>
     </section>
 
+    <!-- 🏟️ みんなのロビー & ゲームリクエスト掲示板 -->
+    <section id="community-lobby-section" aria-label="みんなのロビーとリクエスト" class="bg-white dark:bg-[#101624] border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 md:p-6 shadow-sm space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+        <div>
+          <span class="text-[10px] font-mono font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Community Lobby & Requests</span>
+          <h2 class="font-display text-lg md:text-xl font-extrabold text-slate-900 dark:text-white">🏟️ みんなのロビー ＆ 作ってほしいゲーム募集</h2>
+        </div>
+        <div class="flex flex-wrap gap-1.5 text-xs">
+          <button type="button" onclick="filterLobby('all', this)" class="lobby-filter-btn px-3 py-1 rounded-lg bg-indigo-600 text-white font-bold transition cursor-pointer">すべて</button>
+          <button type="button" onclick="filterLobby('chat', this)" class="lobby-filter-btn px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition cursor-pointer">💬 雑談</button>
+          <button type="button" onclick="filterLobby('request', this)" class="lobby-filter-btn px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition cursor-pointer">💡 リクエスト</button>
+          <button type="button" onclick="filterLobby('release', this)" class="lobby-filter-btn px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition cursor-pointer">🚀 新作</button>
+        </div>
+      </div>
+
+      <form id="lobby-post-form" onsubmit="event.preventDefault(); submitLobbyPost();" class="grid grid-cols-1 md:grid-cols-12 gap-2 bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
+        <input type="text" id="lobby-author-input" placeholder="ニックネーム" maxlength="24" class="md:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-xl text-xs outline-none focus:border-indigo-500">
+        <select id="lobby-kind-select" class="md:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-xl text-xs outline-none focus:border-indigo-500 font-bold">
+          <option value="chat">💬 雑談・感想</option>
+          <option value="request">💡 ゲーム制作リクエスト</option>
+        </select>
+        <input type="text" id="lobby-msg-input" placeholder="感想、攻略メモ、Studioで作ってほしいお題を書こう！" maxlength="240" required class="md:col-span-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2 rounded-xl text-xs outline-none focus:border-indigo-500">
+        <button type="submit" id="lobby-submit-btn" class="md:col-span-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl text-xs transition shadow-sm cursor-pointer">
+          投稿する
+        </button>
+      </form>
+
+      <div id="lobby-posts-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-1">
+        <p class="text-xs text-slate-400 col-span-full text-center py-6 font-mono">ロビー投稿を読み込み中...</p>
+      </div>
+    </section>
+
     <footer class="pt-6 pb-4 border-t border-slate-200 dark:border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-500 dark:text-slate-400">
       <div class="flex items-center gap-2 font-mono">
         <span class="font-bold text-slate-700 dark:text-slate-200">G-HUB</span>
         <span>·</span>
         <span>無料ブラウザゲーム＆インディーゲーム投稿プラットフォーム</span>
       </div>
-      <div class="flex items-center gap-4 font-mono">
+      <div class="flex items-center gap-4 font-mono flex-wrap">
+        <a href="pwa.html" class="hover:text-cyan-500">📲 PWAダウンロード</a>
+        <a href="studio.html" class="hover:text-emerald-500">GHUB Studio</a>
         <a href="upload.html" class="hover:text-indigo-500">ゲームを公開</a>
         <a href="profile.html" class="hover:text-indigo-500">マイページ</a>
         <a href="/sitemap.xml" class="hover:text-indigo-500">Sitemap</a>
@@ -596,6 +712,9 @@
     let spotlightGame = null;
     let shortsQueue = [];
     let shortsIndex = 0;
+    let offlineGamesMap = new Map();
+    let lobbyPosts = [];
+    let lobbyFilter = 'all';
 
     function escapeHtml(str) {
       return String(str || '')
@@ -699,14 +818,21 @@
     });
 
     window.handlePWAInstallClick = async () => {
-      if (!deferredInstallPrompt) return;
-      deferredInstallPrompt.prompt();
-      try {
-        await deferredInstallPrompt.userChoice;
-      } catch (e) {}
-      deferredInstallPrompt = null;
-      const btn = document.getElementById('pwa-install-btn');
-      if (btn) btn.classList.add('hidden');
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        try {
+          await deferredInstallPrompt.userChoice;
+        } catch (e) {}
+        deferredInstallPrompt = null;
+        const btn = document.getElementById('pwa-install-btn');
+        if (btn) btn.classList.add('hidden');
+        return;
+      }
+      if (window.GHUB_PWA?.isIosSafari?.()) {
+        window.GHUB_PWA.showIOSInstallModal();
+      } else {
+        alert('ブラウザのメニュー（⋮ または 共有アイコン）から「ホーム画面に追加」または「アプリをインストール」を選択するとPWA化できます！');
+      }
     };
 
     // --- テーマ管理 (Dark / Light) ---
@@ -733,10 +859,32 @@
     };
     initTheme();
 
-    // --- 高速・ノンブロッキング ゲーム読み込み（マルチレイヤー対応） ---
+    // --- PWA オフライン保存一覧同期 ---
+    async function refreshOfflineGamesState() {
+      try {
+        const savedList = await window.GHUB_PWA?.listOfflineGames?.();
+        offlineGamesMap = new Map();
+        if (Array.isArray(savedList)) {
+          savedList.forEach((item) => {
+            if (item && item.id) offlineGamesMap.set(item.id, item);
+          });
+        }
+        const badge = document.getElementById('offline-saved-count');
+        if (badge) badge.innerText = String(offlineGamesMap.size);
+      } catch (e) {}
+    }
+
+    window.addEventListener('ghub:offline-updated', async () => {
+      await refreshOfflineGamesState();
+      renderTrendingShowcase();
+      renderGames();
+    });
+
+    // --- 高速・ノンブロッキング ゲーム読み込み（マルチレイヤー & オフラインPWA対応） ---
     async function loadGames() {
       try {
         loadLocalReviewCache();
+        await refreshOfflineGamesState();
 
         let games = [];
         try {
@@ -769,6 +917,20 @@
           }
         } catch (e) {}
 
+        if (games.length > 0) {
+          window.GHUB_PWA?.cacheCatalogSnapshot?.(games);
+        } else {
+          const cached = window.GHUB_PWA?.getCachedCatalogSnapshot?.() || [];
+          games = Array.isArray(cached) ? cached : [];
+        }
+
+        // IndexedDB にオフライン保存済みのゲームを確実にマージ（オフライン起動時でも遊べるように）
+        for (const off of offlineGamesMap.values()) {
+          if (!games.some(g => g.id === off.id)) {
+            games.unshift(off);
+          }
+        }
+
         try {
           const tRes = await fetch('/api/game-trials');
           if (tRes.ok) {
@@ -780,10 +942,12 @@
         applyInitialUrlSearch();
         updateHeroStats();
         updateSpotlightCard(games[0] || null);
+        renderTrendingShowcase();
         renderGames();
         fetchReviewsSummaryAsync();
       } catch (err) {
         console.error('Failed to load games:', err);
+        renderTrendingShowcase();
         renderGames();
       }
     }
@@ -792,9 +956,14 @@
       try {
         const params = new URLSearchParams(window.location.search);
         const qParam = params.get('q');
+        const tabParam = params.get('tab');
         const input = document.getElementById('search-input');
         if (qParam && input && !input.value) {
           input.value = qParam;
+        }
+        if (tabParam === 'offline') {
+          currentTab = 'offline';
+          updateTabButtons(document.getElementById('tab-offline-btn'));
         }
       } catch (e) {}
     }
@@ -1084,7 +1253,12 @@
       const clearBtn = document.getElementById('search-clear-btn');
       if (clearBtn) clearBtn.classList.toggle('hidden', q.length === 0);
 
-      let filtered = [...allGames].filter(g => {
+      let sourcePool = [...allGames];
+      if (currentTab === 'offline') {
+        sourcePool = Array.from(offlineGamesMap.values());
+      }
+
+      let filtered = sourcePool.filter(g => {
         if (!q) return true;
         return (g.title || '').toLowerCase().includes(q)
           || (g.description || '').toLowerCase().includes(q)
@@ -1094,7 +1268,10 @@
 
       if (onlyEvent) filtered = filtered.filter(g => g.is_event);
 
-      if (currentTab === 'new') {
+      if (currentTab === 'trending') {
+        filtered = filtered.filter(g => g.is_trending || String(g.id).startsWith('trend-') || (g.play_count || 0) >= 100);
+        filtered.sort((a, b) => ((b.is_trending ? 1 : 0) - (a.is_trending ? 1 : 0)) || ((b.play_count || 0) - (a.play_count || 0)));
+      } else if (currentTab === 'new') {
         filtered.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
       } else if (currentTab === 'ranking') {
         filtered.sort((a, b) => (b.play_count || 0) - (a.play_count || 0));
@@ -1119,7 +1296,18 @@
 
       const list = document.getElementById('game-list');
       if (filtered.length === 0) {
-        if (currentTab === 'recent') {
+        if (currentTab === 'offline') {
+          list.innerHTML = `
+            <div class="col-span-full text-center py-12 bg-white dark:bg-[#101624] border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
+              <span class="text-3xl block mb-2">📲</span>
+              <p class="font-bold text-slate-800 dark:text-slate-200 text-sm">PWAアプリ内に保存されたゲームはまだありません</p>
+              <p class="text-xs text-slate-400 mt-1">各ゲームカードの「保存」やプレイ画面の「PWAアプリ内に保存」を押すと、圏外でも遊べます！</p>
+              <button onclick="selectTab('all', document.querySelector('.tag-btn'))" class="mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition">
+                すべてのゲームを見る
+              </button>
+            </div>
+          `;
+        } else if (currentTab === 'recent') {
           list.innerHTML = `
             <div class="col-span-full text-center py-12 bg-white dark:bg-[#101624] border border-slate-200 dark:border-slate-800 rounded-2xl p-6">
               <span class="text-3xl block mb-2">🕒</span>
@@ -1144,12 +1332,17 @@
         const safeDesc = escapeHtml(g.description || 'ブラウザで今すぐ遊べるインディーゲーム。');
         const safeTag = escapeHtml(g.tag || 'Indie');
         const thumbSrc = g.thumbnail_url || DEFAULT_THUMB_URL;
+        const isOfflineSaved = offlineGamesMap.has(g.id);
 
         let rankBadge = '';
         if (currentTab === 'ranking') {
           const rankColors = ['bg-amber-400 text-slate-950 font-black', 'bg-slate-200 text-slate-900 font-black', 'bg-amber-600 text-white font-black'];
           const rankColor = rankColors[index] || 'bg-slate-900/90 text-slate-200 font-bold';
           rankBadge = `<span class="absolute top-2.5 right-2.5 z-20 ${rankColor} text-[10px] px-2 py-0.5 rounded-md shadow-md font-mono tabular-nums">#${index + 1}</span>`;
+        } else if (isOfflineSaved) {
+          rankBadge = `<span class="absolute top-2.5 right-2.5 z-20 bg-emerald-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-md shadow-sm font-mono">✈️ オフライン可</span>`;
+        } else if (g.is_trending) {
+          rankBadge = `<span class="absolute top-2.5 right-2.5 z-20 bg-gradient-to-r from-amber-400 to-rose-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-md shadow-sm font-mono">${escapeHtml(g.trend_badge || '🔥 TREND')}</span>`;
         } else if (g.is_event) {
           rankBadge = `<span class="absolute top-2.5 right-2.5 z-20 bg-indigo-600 text-white font-bold text-[10px] px-2 py-0.5 rounded-md shadow-sm font-mono">EVENT</span>`;
         }
@@ -1197,9 +1390,15 @@
                   <button type="button" onclick="event.preventDefault(); event.stopPropagation(); quickShareGame('${g.id}')" class="px-2 py-1 bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-950/60 rounded-lg text-slate-500 hover:text-indigo-600 dark:text-slate-300 dark:hover:text-indigo-300 transition text-[10px] font-bold" title="共有">
                     共有
                   </button>
-                  <button type="button" onclick="event.preventDefault(); event.stopPropagation(); quickDownloadOfflineGame('${g.id}')" class="px-2 py-1 bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/60 rounded-lg text-slate-500 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-emerald-300 transition text-[10px] font-bold" title="完全オフライン版をダウンロード">
-                    保存
-                  </button>
+                  ${currentTab === 'offline' ? `
+                    <button type="button" onclick="event.preventDefault(); event.stopPropagation(); removeOfflineFromTab('${g.id}')" class="px-2 py-1 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/60 rounded-lg text-rose-600 dark:text-rose-300 transition text-[10px] font-bold" title="PWA保存データを削除">
+                      削除
+                    </button>
+                  ` : `
+                    <button type="button" onclick="event.preventDefault(); event.stopPropagation(); quickDownloadOfflineGame('${g.id}')" class="px-2 py-1 ${isOfflineSaved ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-500/30' : 'bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-950/60 text-slate-500 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-emerald-300'} rounded-lg transition text-[10px] font-bold" title="PWA保存 ＆ 完全オフラインHTML書き出し">
+                      ${isOfflineSaved ? '✈️ 保存済' : '保存'}
+                    </button>
+                  `}
                 </div>
               </div>
             </div>
@@ -1743,13 +1942,23 @@
       window.open(lineUrl, '_blank', 'width=600,height=500');
     };
 
-    // --- 📥 オフライン保存機能 ---
+    // --- 📥 PWAオフライン保存 & .html書き出し ---
     window.quickDownloadOfflineGame = async (gameId) => {
       const game = allGames.find(g => g.id === gameId);
       const title = game ? game.title : 'ゲーム';
 
-      const confirmDownload = confirm(`「${title}」の完全オフライン版（.html）をダウンロードしますか？\n\nインターネット不要で、ダウンロードしたHTMLファイルをブラウザでダブルクリックするだけでそのまま遊べます！`);
-      if (!confirmDownload) return;
+      try {
+        if (window.GHUB_PWA?.saveOfflineGameById && game) {
+          await window.GHUB_PWA.saveOfflineGameById(game);
+          await refreshOfflineGamesState();
+          renderGames();
+          playSfx('combo');
+          const alsoExport = confirm(`📲 「${title}」をPWAアプリ内に保存しました！\nインターネットがない環境（機内モード）でもこのままG-HUB内で遊べます。\n\n単体の .html ファイルとしてもダウンロードしますか？`);
+          if (!alsoExport) return;
+        }
+      } catch (e) {
+        console.warn('PWA cache skipped:', e);
+      }
 
       const downloadUrl = `/api/download-offline-game?id=${encodeURIComponent(gameId)}`;
       const a = document.createElement('a');
@@ -1760,9 +1969,240 @@
       document.body.removeChild(a);
     };
 
+    window.removeOfflineFromTab = async (gameId) => {
+      await window.GHUB_PWA?.removeOfflineGame?.(gameId);
+      await refreshOfflineGamesState();
+      renderTrendingShowcase();
+      renderGames();
+    };
+
+    function renderTrendingShowcase() {
+      const grid = document.getElementById('trending-games-grid');
+      if (!grid) return;
+      const trendingPool = allGames.filter(g => g.is_trending || String(g.id).startsWith('trend-'));
+      const displayList = (trendingPool.length > 0 ? trendingPool : allGames)
+        .slice()
+        .sort((a, b) => (b.play_count || 0) - (a.play_count || 0))
+        .slice(0, 4);
+
+      if (displayList.length === 0) {
+        grid.innerHTML = '<div class="col-span-full text-xs text-slate-400 font-mono py-4 text-center">トレンド作品を取得中...</div>';
+        return;
+      }
+
+      grid.innerHTML = displayList.map(g => {
+        const thumb = g.thumbnail_url || DEFAULT_THUMB_URL;
+        const badge = g.trend_badge || '🔥 急上昇';
+        const isSaved = offlineGamesMap.has(g.id);
+        return `
+          <div class="group bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden hover:border-amber-400 transition flex flex-col justify-between shadow-sm">
+            <a href="play.html?id=${encodeURIComponent(g.id)}" onclick="playSfx('launch')" class="block">
+              <div class="relative aspect-video bg-slate-950 overflow-hidden">
+                <img src="${escapeHtml(thumb)}" alt="${escapeHtml(g.title)}" loading="lazy" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                <span class="absolute top-2 left-2 bg-gradient-to-r from-amber-400 to-rose-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-md shadow">${escapeHtml(badge)}</span>
+                ${isSaved ? '<span class="absolute top-2 right-2 bg-emerald-500 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-md shadow">✈️ 保存済</span>' : ''}
+              </div>
+              <div class="p-3 space-y-1">
+                <h3 class="font-display font-bold text-sm text-slate-900 dark:text-white truncate">${escapeHtml(g.title)}</h3>
+                <p class="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">${escapeHtml(g.description || '')}</p>
+              </div>
+            </a>
+            <div class="px-3 pb-3 flex items-center justify-between gap-2 text-[11px]">
+              <span class="font-mono text-slate-400 tabular-nums">🎮 ${g.play_count || 0} · ❤️ ${g.likes_count || 0}</span>
+              <div class="flex items-center gap-1.5">
+                <button type="button" onclick="quickDownloadOfflineGame('${escapeHtml(g.id)}')" class="px-2 py-1 rounded-lg ${isSaved ? 'bg-emerald-500/20 text-emerald-500' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'} font-bold text-[10px] cursor-pointer">
+                  ${isSaved ? '✈️ 保存済' : '保存'}
+                </button>
+                <a href="play.html?id=${encodeURIComponent(g.id)}" onclick="playSfx('launch')" class="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-black text-[10px]">
+                  ▶ 遊ぶ
+                </a>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.saveAllTrendingToPwa = async () => {
+      const btn = document.getElementById('home-batch-pwa-btn');
+      const targets = allGames.filter(g => g.is_trending || String(g.id).startsWith('trend-'));
+      if (!window.GHUB_PWA?.saveOfflineGameById || targets.length === 0) {
+        window.location.href = 'pwa.html';
+        return;
+      }
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = '⏳ 保存中...';
+      }
+      try {
+        for (const g of targets.slice(0, 6)) {
+          await window.GHUB_PWA.saveOfflineGameById(g);
+        }
+        await refreshOfflineGamesState();
+        renderTrendingShowcase();
+        renderGames();
+        playSfx('combo');
+        alert(`🎉 トレンド ${targets.length} 作品をPWAに一括保存しました！圏外でも遊べます。`);
+      } catch (e) {
+        alert('一部の保存に失敗しました。PWAダウンロードページで再試行してください。');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = '✈️ トレンド一括PWA保存';
+        }
+      }
+    };
+
+    // --- 🏟️ コミュニティパルス ＆ ロビー掲示板（過疎解消） ---
+    async function loadCommunityPulse() {
+      try {
+        const res = await fetch('/api/community/pulse');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const countEl = document.getElementById('pulse-online-count');
+        if (countEl) countEl.innerText = String(data.online_count || 0);
+
+        if (data.weekly_jam) {
+          const jBadge = document.getElementById('pulse-jam-badge');
+          const jTitle = document.getElementById('pulse-jam-title');
+          const jDesc = document.getElementById('pulse-jam-desc');
+          const jLink = document.getElementById('pulse-jam-link');
+          if (jBadge) jBadge.innerText = '🏆 ' + data.weekly_jam.badge;
+          if (jTitle) jTitle.innerText = data.weekly_jam.title;
+          if (jDesc) jDesc.innerText = data.weekly_jam.description;
+          if (jLink && data.weekly_jam.default_prompt) {
+            jLink.href = `studio.html?prompt=${encodeURIComponent(data.weekly_jam.default_prompt)}`;
+          }
+        }
+
+        const playersStrip = document.getElementById('pulse-active-players');
+        if (playersStrip) {
+          const active = Array.isArray(data.active_players) ? data.active_players : [];
+          if (active.length === 0) {
+            playersStrip.innerHTML = `<div class="text-xs text-slate-400 font-mono py-1">🎮 最初のプレイヤーとしてゲームを起動しよう！</div>`;
+          } else {
+            playersStrip.innerHTML = active.map(p => `
+              <a href="play.html?id=${encodeURIComponent(p.game_id)}" onclick="playSfx('launch')" class="shrink-0 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 rounded-xl px-3 py-2 flex items-center gap-2.5 transition max-w-[260px]">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse"></span>
+                <div class="min-w-0">
+                  <div class="text-[11px] font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtml(p.username)}</div>
+                  <div class="text-[10px] text-slate-400 font-mono truncate">🎮 ${escapeHtml(p.game_title)}</div>
+                </div>
+                <span class="shrink-0 bg-emerald-600 text-white text-[10px] font-black px-2 py-1 rounded-lg">合流</span>
+              </a>
+            `).join('');
+          }
+        }
+      } catch (e) {}
+    }
+
+    async function loadLobbyPosts() {
+      try {
+        const res = await fetch('/api/lobby');
+        if (!res.ok) return;
+        const list = await res.json();
+        lobbyPosts = Array.isArray(list) ? list : [];
+        renderLobbyPosts();
+      } catch (e) {
+        const container = document.getElementById('lobby-posts-list');
+        if (container) container.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4 font-mono">オフラインのためロビーを表示できません</p>';
+      }
+    }
+
+    window.filterLobby = (kind, btn) => {
+      playSfx('tap');
+      lobbyFilter = kind;
+      document.querySelectorAll('.lobby-filter-btn').forEach(b => {
+        b.className = 'lobby-filter-btn px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold transition cursor-pointer';
+      });
+      if (btn) {
+        btn.className = 'lobby-filter-btn px-3 py-1 rounded-lg bg-indigo-600 text-white font-bold transition cursor-pointer';
+      }
+      renderLobbyPosts();
+    };
+
+    function renderLobbyPosts() {
+      const container = document.getElementById('lobby-posts-list');
+      if (!container) return;
+      const items = lobbyFilter === 'all' ? lobbyPosts : lobbyPosts.filter(p => p.kind === lobbyFilter);
+      if (!items.length) {
+        container.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-6 font-mono">まだ投稿がありません。最初のコメントを書こう！</p>';
+        return;
+      }
+
+      container.innerHTML = items.map(p => {
+        const kindBadge = p.kind === 'request'
+          ? '<span class="text-[10px] font-black bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-mono">💡 リクエスト</span>'
+          : p.kind === 'release'
+            ? '<span class="text-[10px] font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded font-mono">🚀 新作リリース</span>'
+            : '<span class="text-[10px] font-bold bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded font-mono">💬 雑談</span>';
+
+        return `
+          <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 flex flex-col justify-between gap-2.5">
+            <div>
+              <div class="flex items-center justify-between gap-2 mb-1.5">
+                <div class="flex items-center gap-2 min-w-0">
+                  ${kindBadge}
+                  <span class="font-bold text-xs text-slate-800 dark:text-slate-100 truncate">${escapeHtml(p.author)}</span>
+                </div>
+                <span class="text-[10px] text-slate-400 font-mono shrink-0">${formatLastSeen(p.created_at)}</span>
+              </div>
+              <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed break-words">${escapeHtml(p.message)}</p>
+            </div>
+            <div class="flex items-center justify-end gap-2">
+              ${p.kind === 'request' ? `
+                <a href="studio.html?prompt=${encodeURIComponent(p.message)}" class="text-[11px] font-bold bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-lg transition">
+                  🛠️ Studioでこのお題を作る
+                </a>
+              ` : ''}
+              ${p.game_id ? `
+                <a href="play.html?id=${encodeURIComponent(p.game_id)}" class="text-[11px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1 rounded-lg transition">
+                  ▶ 遊ぶ
+                </a>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.submitLobbyPost = async () => {
+      const authorEl = document.getElementById('lobby-author-input');
+      const kindEl = document.getElementById('lobby-kind-select');
+      const msgEl = document.getElementById('lobby-msg-input');
+      const btn = document.getElementById('lobby-submit-btn');
+
+      const author = (authorEl?.value || '').trim() || (currentUser?.email ? currentUser.email.split('@')[0] : 'ゲスト');
+      const kind = kindEl?.value || 'chat';
+      const message = (msgEl?.value || '').trim();
+      if (!message) return;
+
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch('/api/lobby', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ author, kind, message })
+        });
+        if (res.ok) {
+          if (msgEl) msgEl.value = '';
+          playSfx('combo');
+          await loadLobbyPosts();
+        }
+      } catch (e) {
+        alert('投稿に失敗しました');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    };
+
     loadGames();
     checkUser();
     startPresenceHeartbeat();
+    loadCommunityPulse();
+    loadLobbyPosts();
+    setInterval(loadCommunityPulse, 20000);
   </script>
 </body>
 </html>

@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import path from 'path';
@@ -5,13 +6,14 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import JSZip from 'jszip';
 import { GoogleGenAI, ThinkingLevel } from '@google/genai';
+import { TRENDING_GAMES_SEED } from './trending-games.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const HF_TOKEN = process.env.HF_TOKEN || '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';
+const HF_TOKEN = process.env.HF_TOKEN || '';
 const geminiApiKey = process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY' ? process.env.GEMINI_API_KEY : '';
 const geminiClient = geminiApiKey
   ? new GoogleGenAI({
@@ -19,6 +21,17 @@ const geminiClient = geminiApiKey
       httpOptions: { headers: { 'User-Agent': 'aistudio-build' } }
     })
   : null;
+
+// CORS対応（外部デプロイ・srcdoc iframe・PWAからのAI/API呼び出しを許可）
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
 
 // 1. Supabaseプロキシ
 app.use('/supabase', createProxyMiddleware({
@@ -152,8 +165,32 @@ const payloadsStore = new Map<string, { filename: string; contentType: string; b
 let cachedActualGames: any[] = [];
 let lastDemoFriendsRefresh = 0;
 
+function seedTrendingGames() {
+  for (const tg of TRENDING_GAMES_SEED) {
+    const { html, ...meta } = tg;
+    const entryUrl = `/api/games/payload/${encodeURIComponent(meta.id)}`;
+    const record = { ...meta, entry_url: entryUrl };
+    if (!gamesStore.has(meta.id)) {
+      gamesStore.set(meta.id, record);
+    }
+    if (!payloadsStore.has(meta.id) && html) {
+      payloadsStore.set(meta.id, {
+        filename: 'index.html',
+        contentType: 'text/html; charset=utf-8',
+        buffer: Buffer.from(html, 'utf-8')
+      });
+    }
+    if (!cachedActualGames.some(g => g.id === meta.id)) {
+      cachedActualGames.push(record);
+    }
+  }
+}
+
+seedTrendingGames();
+
 // 実際のゲームリストを取得してデモフレンドのプレイ中ゲーム＆プレイ時間をランダム設定
 async function refreshDemoFriendsFromActualGames() {
+  seedTrendingGames();
   try {
     // 1. Supabaseから実際のゲームを取得
     const res = await fetch('https://ddcnoghsiuxfhnwmtpyn.supabase.co/rest/v1/games?select=*', {
@@ -168,7 +205,7 @@ async function refreshDemoFriendsFromActualGames() {
       games = await res.json();
     }
 
-    // 2. サーバー内のローカルゲームも合算
+    // 2. サーバー内のローカルゲーム（トレンドゲーム含む）も合算
     for (const g of gamesStore.values()) {
       if (!games.some(x => x.id === g.id)) {
         games.push(g);
@@ -182,12 +219,8 @@ async function refreshDemoFriendsFromActualGames() {
     console.warn('実ゲーム取得エラー（キャッシュを使用）:', err);
   }
 
-  // 利用可能なゲーム一覧（実ゲームがあればそれを使用、なければローカルアセットへフォールバック）
-  const pool = cachedActualGames.length > 0 ? cachedActualGames : [
-    { id: 'demo-retro-runner', title: 'Pixel Cyber Runner', thumbnail_url: '/src/assets/images/ghub_hero_arcade_1794550925307.jpg' },
-    { id: 'demo-dungeon-quest', title: 'Dungeon Escape 2D', thumbnail_url: '/src/assets/images/ghub_default_thumb_1794550924982.jpg' },
-    { id: 'demo-space-fighter', title: 'Galactic Defense', thumbnail_url: '/src/assets/images/ghub_hero_arcade_1794550925307.jpg' }
-  ];
+  // 利用可能なゲーム一覧（実ゲーム・トレンドゲームを優先使用）
+  const pool = cachedActualGames.length > 0 ? cachedActualGames : Array.from(gamesStore.values());
 
   const now = Date.now();
   // 配列をシャッフルする補助関数
@@ -320,7 +353,14 @@ refreshDemoFriendsFromActualGames();
 setInterval(refreshDemoFriendsFromActualGames, 180000);
 
 // ゲーム保存 & バックアップ API (投稿したゲームが見つからない問題を根本防止)
+app.get('/api/trending-games', (_req: Request, res: Response) => {
+  seedTrendingGames();
+  const trending = Array.from(gamesStore.values()).filter(g => g?.is_trending);
+  res.json(trending);
+});
+
 app.get('/api/games', (req: Request, res: Response) => {
+  seedTrendingGames();
   const game_id = req.query.id as string;
   if (game_id) {
     const game = gamesStore.get(game_id);
@@ -754,90 +794,261 @@ app.post('/api/game-trials', (req: Request, res: Response) => {
   res.json({ success: true, game_id, trial_minutes: min });
 });
 
-// 3. G-AI (Gemini 4 Hydrogen / Qwen 4 Max / Claude Fable 5.2 記念マルチエンジン)
-app.post('/ai', async (req: Request, res: Response) => {
-  const { systemPrompt, userPrompt, maxTokens = 1500 } = req.body;
+// 🏟️ コミュニティロビー & ゲームリクエスト掲示板（過疎解消＆Studio連携）
+interface LobbyPost {
+  id: string;
+  author: string;
+  kind: 'chat' | 'request' | 'release';
+  message: string;
+  game_id?: string;
+  created_at: string;
+}
+
+const lobbyPostsStore: LobbyPost[] = [
+  {
+    id: 'lobby_seed_1',
+    author: 'Ren (レン)',
+    kind: 'request',
+    message: 'スマホ片手で10秒間連打＆コンボで脳汁が出るハイテンポミニゲーム誰か作ってほしい！',
+    created_at: new Date(Date.now() - 1000 * 60 * 18).toISOString()
+  },
+  {
+    id: 'lobby_seed_2',
+    author: 'Yuki (ユキ)',
+    kind: 'chat',
+    message: 'G-HUB Studioでテンプレートを少し書き換えてそのまま公開できたの快適すぎる🎮',
+    created_at: new Date(Date.now() - 1000 * 60 * 9).toISOString()
+  },
+  {
+    id: 'lobby_seed_3',
+    author: 'Alex',
+    kind: 'request',
+    message: '敵の弾幕をギリギリで避けるとスローモーションになるネオン回避アクションが見たい！',
+    created_at: new Date(Date.now() - 1000 * 60 * 4).toISOString()
+  }
+];
+
+app.get('/api/lobby', (_req: Request, res: Response) => {
+  res.json(lobbyPostsStore.slice(0, 40));
+});
+
+app.post('/api/lobby', (req: Request, res: Response) => {
+  const { author, kind, message, game_id } = req.body || {};
+  const cleanMsg = String(message || '').trim().slice(0, 280);
+  if (!cleanMsg) return res.status(400).json({ error: 'メッセージを入力してください' });
+
+  const post: LobbyPost = {
+    id: 'lobby_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+    author: String(author || 'ゲストプレイヤー').trim().slice(0, 32) || 'ゲストプレイヤー',
+    kind: kind === 'request' || kind === 'release' ? kind : 'chat',
+    message: cleanMsg,
+    game_id: game_id ? String(game_id) : undefined,
+    created_at: new Date().toISOString()
+  };
+
+  lobbyPostsStore.unshift(post);
+  if (lobbyPostsStore.length > 80) lobbyPostsStore.length = 80;
+  res.json({ success: true, post });
+});
+
+app.get('/api/community/pulse', async (_req: Request, res: Response) => {
+  if (Date.now() - lastDemoFriendsRefresh > 120000) {
+    await refreshDemoFriendsFromActualGames().catch(() => {});
+  }
+  const now = Date.now();
+  const activePlayers: any[] = [];
+  let onlineCount = 0;
+
+  for (const pres of presenceStore.values()) {
+    if (now - pres.last_seen < 300000) {
+      onlineCount++;
+      if (pres.status === 'playing' && pres.current_game_id && pres.current_game_title) {
+        activePlayers.push({
+          username: pres.username,
+          game_id: pres.current_game_id,
+          game_title: pres.current_game_title,
+          game_thumb: pres.current_game_thumb || null,
+          session_seconds: pres.current_session_seconds || 0
+        });
+      }
+    }
+  }
+
+  res.json({
+    online_count: Math.max(onlineCount, activePlayers.length),
+    active_players: activePlayers.slice(0, 6),
+    recent_lobby: lobbyPostsStore.slice(0, 8),
+    weekly_jam: {
+      badge: 'WEEKLY STUDIO JAM',
+      title: '10秒で脳汁！ハイテンポ・ブラウザミニゲーム祭り',
+      description: 'GHUB Studioでコードを書くかAIに生成させてそのままシームレス公開しよう。スマホ対応作品大歓迎！',
+      default_prompt: '10秒間で連続コンボと爆発エフェクトが爽快なワンタップミニゲーム'
+    }
+  });
+});
+
+// 3. G-AI (アップロード後も確実に動作するマルチエンジン + ローカルフォールバック)
+function extractPromptText(raw: any): string {
+  if (!raw) return '';
+  if (typeof raw === 'string') return raw;
+  if (Array.isArray(raw)) {
+    return raw
+      .map(item => {
+        if (typeof item === 'string') return item;
+        if (item?.parts && Array.isArray(item.parts)) {
+          return item.parts.map((p: any) => p?.text || '').join('\n');
+        }
+        return item?.text || item?.content || JSON.stringify(item);
+      })
+      .join('\n');
+  }
+  if (typeof raw === 'object') {
+    if (raw.text) return String(raw.text);
+    if (Array.isArray(raw.parts)) return raw.parts.map((p: any) => p?.text || '').join('\n');
+    return JSON.stringify(raw);
+  }
+  return String(raw);
+}
+
+function buildLocalAiFallback(userPrompt: string): string {
+  const lower = userPrompt.toLowerCase();
+  if (lower.includes('choices:') || lower.includes('rpg') || lower.includes('ダンジョン') || lower.includes('冒険')) {
+    return 'ネオンが明滅する遺跡の奥で、古代のコアから微かな魔力反応を検知した。あなたは警戒を強めながら次の一手を決める。\nCHOICES:["⚡ コアに触れて力を引き出す","🛡️ 周囲のトラップを解除する","🏃 奥の隠し通路へ駆け抜ける"]';
+  }
+  if (lower.includes('html') || lower.includes('<!doctype') || lower.includes('ゲーム') && lower.includes('コード')) {
+    return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Neon Tap Dash</title><style>body{margin:0;background:#090d16;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh}button{padding:18px 34px;border-radius:16px;border:none;background:linear-gradient(135deg,#6366f1,#ec4899);color:#fff;font-size:20px;font-weight:900;cursor:pointer}</style></head><body><h1 id="sc">SCORE: 0</h1><button onclick="s+=10;document.getElementById('sc').textContent='SCORE: '+s;">⚡ TAP!</button><script>let s=0;</script></body></html>`;
+  }
+  return '⚡ G-AI（オフライン/バックアップモード）で応答しています！今は「⚡ ネオン弾幕サバイバー」「🍉 ネオン・オーブマージ」「🔥 10秒脳汁オーバーロード」などトレンド作品が即プレイ可能です。気になるジャンルを教えてください！';
+}
+
+async function handleAiRequest(req: Request, res: Response) {
+  const body = req.body || {};
+  const systemPrompt = extractPromptText(body.systemPrompt || body.systemInstruction || body.system)
+    || 'You are G-AI on G-HUB. Respond helpfully in crisp, energetic Japanese.';
+  const userPrompt = extractPromptText(body.userPrompt || body.prompt || body.message || body.contents);
+  const maxTokens = Math.min(Number(body.maxTokens || body.max_tokens || 1500) || 1500, 4000);
+
+  if (!userPrompt.trim()) {
+    return res.status(400).json({ error: 'プロンプトが空です' });
+  }
 
   // --- ルート0: Gemini 4 Hydrogen (@google/genai) ---
   if (geminiClient) {
     try {
       const response = await geminiClient.models.generateContent({
         model: 'gemini-4-hydrogen',
-        contents: String(userPrompt || ''),
+        contents: userPrompt,
         config: {
-          systemInstruction: systemPrompt || 'You are G-AI powered by Gemini 4 Hydrogen on G-HUB. Recommend indie games in crisp, energetic Japanese.',
+          systemInstruction: systemPrompt,
           thinkingConfig: { thinkingLevel: ThinkingLevel.LOW }
         }
       });
       if (response.text) {
-        return res.json({ reply: response.text, model: 'gemini-4-hydrogen' });
+        return res.json({ reply: response.text, text: response.text, model: 'gemini-4-hydrogen' });
       }
     } catch (e) {
       console.warn('Gemini 4 Hydrogen call fallback:', e);
     }
   }
 
-  // --- ルートA: Hugging Face (Qwen) ---
+  // --- ルートA: Pollinations OpenAI互換API (APIキー不要・本番アップロード対応) ---
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-    const response = await fetch('https://api-inference.huggingface.co/models/Qwen/Qwen2.5-Coder-1.5B-Instruct/v1/chat/completions', {
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const polyRes = await fetch('https://text.pollinations.ai/openai', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${HF_TOKEN}`,
-        'Content-Type': 'application/json',
-        'x-wait-for-model': 'true'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'Qwen/Qwen2.5-Coder-1.5B-Instruct',
+        model: 'openai',
         messages: [
-          { role: 'system', content: systemPrompt || 'You are G-AI, a gaming assistant on G-HUB.' },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        max_tokens: maxTokens,
-        temperature: 0.7
+        max_tokens: maxTokens
       }),
       signal: controller.signal
     });
-
     clearTimeout(timeoutId);
 
-    if (response.ok) {
-      const data: any = await response.json();
-      const reply = data.choices?.[0]?.message?.content;
-      if (reply) return res.json({ reply, model: 'qwen-fallback' });
+    if (polyRes.ok) {
+      const data: any = await polyRes.json();
+      const reply = data?.choices?.[0]?.message?.content;
+      if (reply) {
+        return res.json({ reply, text: reply, model: 'pollinations-openai' });
+      }
     }
   } catch (e) {
-    console.log('Hugging Face待機タイムアウト。即座にバックアップエンジンへ切り替えます...');
+    console.warn('Pollinations OpenAI endpoint fallback:', e);
   }
 
-  // --- ルートB: 高速バックアップサーバー ---
+  // --- ルートB: Pollinations Text エンドポイント ---
   try {
-    console.log('⚡ バックアップAIエンジンで即時生成中...');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
     const backupRes = await fetch('https://text.pollinations.ai/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messages: [
-          { role: 'system', content: systemPrompt || 'You are G-AI on G-HUB. Speak in cheerful Japanese.' },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        model: 'qwen-coder',
+        model: 'openai',
         seed: Math.floor(Math.random() * 10000)
-      })
+      }),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
 
     if (backupRes.ok) {
-      const reply = await backupRes.text();
-      return res.json({ reply, model: 'pollinations-fallback' });
+      const rawText = await backupRes.text();
+      if (rawText && !rawText.trim().startsWith('{"error"')) {
+        return res.json({ reply: rawText, text: rawText, model: 'pollinations-text' });
+      }
     }
-    throw new Error('バックアップエンジン応答なし');
-  } catch (err) {
-    console.error('All AI engines failed:', err);
-    res.status(500).json({ error: 'AIエンジンの接続に失敗しました。もう一度お試しください。' });
+  } catch (e) {
+    console.warn('Pollinations text fallback:', e);
   }
-});
+
+  // --- ルートC: Hugging Face Router (有効なHF_TOKENが設定されている場合のみ) ---
+  if (HF_TOKEN) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const hfRes = await fetch('https://router.huggingface.co/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${HF_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'Qwen/Qwen2.5-Coder-7B-Instruct',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          max_tokens: maxTokens,
+          temperature: 0.7
+        }),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (hfRes.ok) {
+        const data: any = await hfRes.json();
+        const reply = data?.choices?.[0]?.message?.content;
+        if (reply) return res.json({ reply, text: reply, model: 'hf-router' });
+      }
+    } catch (e) {
+      console.warn('HF router fallback:', e);
+    }
+  }
+
+  // --- ルートD: 完全ローカルフォールバック（アップロード後やオフラインでも500エラーにしない） ---
+  const localReply = buildLocalAiFallback(userPrompt);
+  return res.json({ reply: localReply, text: localReply, model: 'ghub-local-fallback', fallback: true });
+}
+
+app.post(['/ai', '/api/ai', '/api/gemini', '/api/gemini/generate'], handleAiRequest);
 
 // 🔍 検索エンジン最適化 (SEO) ヘルパー
 function escapeHtmlStr(str: string): string {
@@ -896,7 +1107,7 @@ async function fetchAllGamesForSeo(): Promise<any[]> {
 app.get('/robots.txt', (req: Request, res: Response) => {
   const baseUrl = getBaseUrl(req);
   res.type('text/plain').send(
-    `User-agent: *\nAllow: /\nAllow: /play.html\nAllow: /upload.html\nDisallow: /api/\nDisallow: /supabase/\n\nSitemap: ${baseUrl}/sitemap.xml\n`
+    `User-agent: *\nAllow: /\nAllow: /play.html\nAllow: /studio.html\nAllow: /pwa.html\nAllow: /upload.html\nDisallow: /api/\nDisallow: /supabase/\n\nSitemap: ${baseUrl}/sitemap.xml\n`
   );
 });
 
@@ -908,6 +1119,8 @@ app.get('/sitemap.xml', async (req: Request, res: Response) => {
 
   const staticEntries = [
     { loc: `${baseUrl}/`, lastmod: today, changefreq: 'hourly', priority: '1.0' },
+    { loc: `${baseUrl}/pwa.html`, lastmod: today, changefreq: 'weekly', priority: '0.9' },
+    { loc: `${baseUrl}/studio.html`, lastmod: today, changefreq: 'weekly', priority: '0.85' },
     { loc: `${baseUrl}/upload.html`, lastmod: today, changefreq: 'weekly', priority: '0.7' }
   ];
 

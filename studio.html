@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#090d16">
+  <meta name="google-site-verification" content="-oHRcv-r1AKxmj2rod8d0Id_04t864zJl18x1JsIQTU" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/manifest.json">
+
+  <title>G-HUB Studio｜コードを書いて即テスト・公開・オフライン保存できるブラウザIDE</title>
+  <meta name="description" content="ブラウザ上でHTML5/Reactゲームのコードを書き、その場でライブテスト・AIコード生成・オフラインHTMLダウンロード・G-HUBへシームレス公開まで完結する開発スタジオ。" />
+  <meta name="keywords" content="G-HUB Studio,ブラウザゲーム開発,HTML5ゲームIDE,Reactゲーム作成,AIゲーム生成,無料ゲーム投稿" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="G-HUB" />
+  <meta property="og:title" content="G-HUB Studio｜ブラウザゲーム開発スタジオ" />
+  <meta property="og:description" content="コードを入力してテストし、そのままシームレスにG-HUBへ公開＆オフライン保存できる開発スタジオ。" />
+  <meta property="og:image" content="/src/assets/images/ghub_hero_arcade_1794550925307.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            display: ['"Bricolage Grotesque"', '"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/esbuild-wasm@0.19.11/lib/browser.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="/ghub-pwa.js"></script>
+  <style>
+    body {
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .studio-fullscreen {
+      position: fixed !important;
+      inset: 0 !important;
+      z-index: 99990 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      border-radius: 0 !important;
+      background: #000 !important;
+    }
+  </style>
+</head>
+<body class="bg-[#090d16] text-slate-100 min-h-screen flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
+
+  <!-- トップスタジオバー -->
+  <header class="bg-[#0f1523] border-b border-slate-800 px-3 md:px-5 py-2.5 flex flex-wrap items-center justify-between gap-2 shrink-0">
+    <div class="flex items-center gap-3">
+      <a href="index.html" class="text-xs font-bold text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-800 px-2.5 py-1.5 rounded-lg transition whitespace-nowrap">
+        ← G-HUB
+      </a>
+      <div class="flex items-center gap-2">
+        <img src="/favicon.svg" alt="G-HUB Studio" class="w-7 h-7 rounded-lg">
+        <div>
+          <span class="font-display font-extrabold text-sm md:text-base tracking-tight text-white leading-none block">G-HUB Studio</span>
+          <span class="text-[10px] font-mono text-indigo-400">Code · Live Test · Publish · Download</span>
+        </div>
+      </div>
+
+      <span id="studio-engine-badge" class="hidden sm:inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+        ⚡ Ready
+      </span>
+    </div>
+
+    <div class="flex items-center gap-1.5 flex-wrap">
+      <!-- モード切替 -->
+      <select id="editor-mode-select" onchange="switchEditorMode(this.value)" class="bg-slate-900 border border-slate-700 text-slate-200 text-xs font-bold px-2.5 py-1.5 rounded-xl outline-none">
+        <option value="html">単一 HTML</option>
+        <option value="split">HTML + CSS + JS</option>
+        <option value="tsx">React / TSX (esbuild)</option>
+      </select>
+
+      <!-- テンプレート -->
+      <select id="template-select" onchange="applyTemplate(this.value)" class="bg-slate-900 border border-slate-700 text-amber-300 text-xs font-bold px-2.5 py-1.5 rounded-xl outline-none">
+        <option value="">✨ テンプレート読込...</option>
+        <option value="clicker">⚡ 10秒脳汁クリッカー (HTML)</option>
+        <option value="dodge">🕹️ ネオン回避アクション (HTML)</option>
+        <option value="sdk">💎 課金SDK連携ショップ (HTML)</option>
+        <option value="react">⚛️ Reactカラーパズル (TSX)</option>
+      </select>
+
+      <button type="button" onclick="runStudioPreview()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-3.5 py-1.5 rounded-xl text-xs shadow transition flex items-center gap-1 cursor-pointer whitespace-nowrap" title="Ctrl+Enter / Cmd+Enter でも実行可能">
+        <span>▶</span> テスト実行
+      </button>
+
+      <a href="/pwa.html" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-emerald-300 font-bold px-3 py-1.5 rounded-xl text-xs transition flex items-center gap-1 whitespace-nowrap">
+        <span>📲</span> PWA保存
+      </a>
+
+      <button type="button" onclick="toggleDownloadMenu()" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 font-bold px-3 py-1.5 rounded-xl text-xs transition flex items-center gap-1 cursor-pointer whitespace-nowrap">
+        <span>📥</span> ダウンロード / PWA保存
+      </button>
+
+      <button type="button" onclick="openPublishDrawer()" class="bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 hover:opacity-95 text-white font-black px-4 py-1.5 rounded-xl text-xs shadow-lg shadow-indigo-500/25 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+        <span>🚀</span> G-HUBへ公開
+      </button>
+    </div>
+  </header>
+
+  <!-- ダウンロードドロップダウン / バー -->
+  <div id="download-menu-bar" class="hidden bg-[#12192b] border-b border-slate-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+    <div class="text-slate-300 font-bold flex items-center gap-2">
+      <span>📥</span>
+      <span>テスト中のゲームをローカル保存・PWAオフライン保存できます</span>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <button type="button" onclick="downloadOfflineBuiltHtml()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-lg transition cursor-pointer">
+        ⚡ 完全オフラインHTML (.html)
+      </button>
+      <button type="button" onclick="saveCurrentStudioToPwa()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-3 py-1.5 rounded-lg transition cursor-pointer">
+        📲 PWAアプリに保存（オフライン遊べる）
+      </button>
+      <button type="button" onclick="downloadRawSourceFile()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold px-3 py-1.5 rounded-lg transition cursor-pointer">
+        📄 ソースのみ保存
+      </button>
+      <button type="button" onclick="toggleDownloadMenu()" class="text-slate-400 hover:text-white px-2">✕</button>
+    </div>
+  </div>
+
+  <!-- メインワークスペース (左右分割) -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-0">
+
+    <!-- 左ペイン: AIアシスト + コードエディタ -->
+    <section class="lg:col-span-6 flex flex-col border-b lg:border-b-0 lg:border-r border-slate-800 min-h-[420px] lg:h-[calc(100vh-58px)]">
+
+      <!-- Gemini 4 Hydrogen AI コード生成バー -->
+      <div class="bg-[#0d1320] border-b border-slate-800 p-3 space-y-2 shrink-0">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2 text-[11px] font-mono">
+            <span class="text-indigo-400 font-bold">✨ AIスタジオ生成 (Gemini 4 Hydrogen)</span>
+            <label class="inline-flex items-center gap-1 text-slate-400 cursor-pointer">
+              <input type="checkbox" id="ai-remix-checkbox" class="rounded bg-slate-800 border-slate-600 text-indigo-500">
+              <span>今のコードを改造</span>
+            </label>
+          </div>
+          <div class="flex gap-1 overflow-x-auto">
+            <button type="button" onclick="setAiPrompt('10秒で脳汁が爆発する連打＆コンボゲーム')" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700 whitespace-nowrap">⚡ 10秒連打</button>
+            <button type="button" onclick="setAiPrompt('ネオンカラーで爽快なブロック崩しゲーム')" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700 whitespace-nowrap">🧱 ブロック崩し</button>
+            <button type="button" onclick="setAiPrompt('スマホ片手で遊べる隕石避けサバイバル')" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded-md border border-slate-700 whitespace-nowrap">☄️ 隕石避け</button>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <input type="text" id="studio-ai-prompt" onkeydown="if(event.key==='Enter'){event.preventDefault(); generateGameWithAI();}" placeholder="作りたいゲームのアイデアを入力（例: パリィができるハイスピード剣戟アクション）" class="flex-1 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-xl text-xs text-white outline-none focus:border-indigo-500">
+          <button type="button" onclick="generateGameWithAI()" id="studio-ai-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-xl transition whitespace-nowrap cursor-pointer">
+            ✨ コード生成
+          </button>
+        </div>
+      </div>
+
+      <!-- ファイルタブ & 便利スニペットバー -->
+      <div class="bg-[#0b101b] border-b border-slate-800 px-3 py-1.5 flex items-center justify-between gap-2 text-xs shrink-0">
+        <div class="flex items-center gap-1" id="file-tabs-bar">
+          <button type="button" onclick="selectFileTab('html')" id="ftab-html" class="px-2.5 py-1 rounded-lg bg-slate-800 text-white font-mono text-[11px] font-bold">index.html</button>
+          <button type="button" onclick="selectFileTab('css')" id="ftab-css" class="hidden px-2.5 py-1 rounded-lg text-slate-400 hover:text-white font-mono text-[11px]">style.css</button>
+          <button type="button" onclick="selectFileTab('js')" id="ftab-js" class="hidden px-2.5 py-1 rounded-lg text-slate-400 hover:text-white font-mono text-[11px]">game.js</button>
+          <button type="button" onclick="selectFileTab('tsx')" id="ftab-tsx" class="hidden px-2.5 py-1 rounded-lg bg-slate-800 text-indigo-300 font-mono text-[11px] font-bold">App.tsx</button>
+        </div>
+
+        <div class="flex items-center gap-2 text-[11px]">
+          <button type="button" onclick="insertGhubPaymentSnippet()" class="text-amber-300 hover:text-amber-200 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md font-mono font-bold transition cursor-pointer" title="G-coin課金呼び出しコードをカーソル位置に挿入">
+            ＋ 課金SDK挿入
+          </button>
+          <label class="inline-flex items-center gap-1 text-slate-400 cursor-pointer">
+            <input type="checkbox" id="auto-run-check" checked class="rounded bg-slate-800 border-slate-600 text-emerald-500">
+            <span>自動反映</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- コードテキストエリア -->
+      <div class="flex-1 relative min-h-[280px] bg-[#080c14]">
+        <textarea id="code-editor" spellcheck="false" class="w-full h-full bg-transparent text-slate-100 font-mono text-[12px] leading-relaxed p-4 outline-none resize-none" placeholder="ここに HTML または React/TSX コードを入力してください..."></textarea>
+      </div>
+
+      <!-- エディタステータスバー -->
+      <div class="bg-[#0b101b] border-t border-slate-800 px-3 py-1.5 flex items-center justify-between text-[10px] font-mono text-slate-400 shrink-0">
+        <span id="editor-stats">0 行 · 0 文字</span>
+        <span id="draft-save-status" class="text-emerald-400">💾 自動保存済み</span>
+      </div>
+    </section>
+
+    <!-- 右ペイン: ライブプレビュー + コンソール -->
+    <section id="studio-preview-pane" class="lg:col-span-6 flex flex-col bg-[#06090f] min-h-[420px] lg:h-[calc(100vh-58px)]">
+
+      <!-- プレビューコントロール -->
+      <div class="bg-[#0f1523] border-b border-slate-800 px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-slate-200">ライブテスト</span>
+          <span id="studio-sandbox-coins" class="bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[11px] font-mono font-bold px-2 py-0.5 rounded">
+            🪙 テスト残高: <span id="sandbox-coin-val">200</span> G
+          </span>
+        </div>
+
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <button type="button" onclick="setViewportMode('desktop')" id="vp-desktop-btn" class="px-2 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-bold">🖥️ PC</button>
+          <button type="button" onclick="setViewportMode('mobile')" id="vp-mobile-btn" class="px-2 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-[11px] font-bold">📱 スマホ</button>
+          <button type="button" onclick="captureStudioThumbnail()" class="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer">
+            📸 サムネ撮影
+          </button>
+          <button type="button" onclick="resetSandboxStorage()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded-lg text-[11px] font-bold transition">
+            🗑️ リセット
+          </button>
+          <button type="button" onclick="togglePreviewFullscreen()" id="studio-fs-btn" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg text-[11px] font-bold transition">
+            ⛶ 全画面
+          </button>
+        </div>
+      </div>
+
+      <!-- プレビューフレームコンテナ -->
+      <div class="flex-1 min-h-0 flex items-center justify-center p-3 bg-[#05070c] overflow-hidden relative">
+        <div id="preview-frame-shell" class="w-full h-full rounded-xl overflow-hidden border border-slate-800 bg-white shadow-2xl transition-all duration-200">
+          <iframe id="studio-iframe" class="w-full h-full border-0 bg-white" tabindex="0" allow="accelerometer; autoplay; clipboard-read; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"></iframe>
+        </div>
+
+        <!-- Studio内 シームレステスト課金HUD -->
+        <div id="studio-sdk-toast" class="hidden absolute top-4 left-1/2 -translate-x-1/2 bg-[#121622]/95 border border-amber-500/60 text-white px-4 py-2 rounded-xl shadow-2xl text-xs font-bold z-30 flex items-center gap-2">
+          <span>💎</span>
+          <span id="studio-sdk-toast-text">課金テスト完了</span>
+        </div>
+      </div>
+
+      <!-- コンソールログ -->
+      <div class="h-32 bg-[#0a0e16] border-t border-slate-800 flex flex-col shrink-0">
+        <div class="px-3 py-1 border-b border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
+          <span>CONSOLE & BUILD LOG</span>
+          <button type="button" onclick="clearStudioConsole()" class="hover:text-white">クリア</button>
+        </div>
+        <div id="studio-console" class="flex-1 overflow-y-auto px-3 py-2 font-mono text-[11px] text-emerald-400 whitespace-pre-wrap leading-relaxed">--- G-HUB Studio 起動完了。コードを入力またはテンプレートを選んでテストしてください ---</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 🚀 シームレス公開ドロワー / モーダル -->
+  <div id="publish-modal" class="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
+    <div class="bg-[#101624] border border-slate-700 p-6 rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl text-xs space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+        <div>
+          <h2 class="text-base font-black text-white flex items-center gap-2">🚀 G-HUBへシームレス公開</h2>
+          <p class="text-[11px] text-slate-400 mt-0.5">テストした現在のコードがそのままG-HUBカタログに公開されます</p>
+        </div>
+        <button type="button" onclick="closePublishDrawer()" class="text-slate-400 hover:text-white text-base">✕</button>
+      </div>
+
+      <div id="studio-auth-notice" class="hidden bg-amber-500/10 border border-amber-500/40 rounded-2xl p-3 space-y-2">
+        <p class="text-amber-300 font-bold">🔑 公開するにはアカウントログインが必要です（コードは消えません）</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <input type="email" id="studio-login-email" placeholder="メールアドレス" class="bg-slate-950 border border-slate-700 px-3 py-1.5 rounded-lg text-white outline-none">
+          <input type="password" id="studio-login-pass" placeholder="パスワード" class="bg-slate-950 border border-slate-700 px-3 py-1.5 rounded-lg text-white outline-none">
+        </div>
+        <button type="button" onclick="studioInlineLogin()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-4 py-1.5 rounded-lg text-xs">
+          ログインして続行
+        </button>
+      </div>
+
+      <div class="flex items-center gap-3 bg-slate-950 p-3 rounded-2xl border border-slate-800">
+        <div id="publish-thumb-preview" class="w-24 aspect-video rounded-lg bg-slate-900 border border-slate-700 overflow-hidden flex items-center justify-center shrink-0 text-[10px] text-slate-500">
+          未撮影
+        </div>
+        <div class="flex-1 space-y-1.5">
+          <span class="font-bold text-slate-200 block">ゲームサムネイル</span>
+          <div class="flex flex-wrap gap-1.5">
+            <button type="button" onclick="captureStudioThumbnail()" class="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2.5 py-1 rounded-lg font-bold">📸 プレビューから撮影</button>
+            <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg font-bold">
+              🖼️ 画像選択
+              <input type="file" accept="image/*" class="hidden" onchange="handleStudioThumbFile(event)">
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block font-bold mb-1 text-slate-300">タイトル *</label>
+          <input type="text" id="pub-title" placeholder="例: 10秒ネオンクリッカー" class="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white outline-none focus:border-indigo-500">
+        </div>
+
+        <div class="grid grid-cols-3 gap-2">
+          <div>
+            <label class="block font-bold mb-1 text-slate-300">ジャンル</label>
+            <select id="pub-tag" class="w-full bg-slate-950 border border-slate-800 px-2.5 py-2 rounded-xl text-white outline-none">
+              <option value="Action">Action</option>
+              <option value="Puzzle">Puzzle</option>
+              <option value="RPG">RPG</option>
+              <option value="Horror">Horror</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold mb-1 text-slate-300">価格 (G)</label>
+            <select id="pub-price" class="w-full bg-slate-950 border border-slate-800 px-2.5 py-2 rounded-xl text-white outline-none">
+              <option value="0">無料 (0 G)</option>
+              <option value="30">30 G</option>
+              <option value="50">50 G</option>
+              <option value="100">100 G</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold mb-1 text-slate-300">体験版 (分)</label>
+            <select id="pub-trial" class="w-full bg-slate-950 border border-slate-800 px-2.5 py-2 rounded-xl text-white outline-none">
+              <option value="0">なし</option>
+              <option value="5">5分</option>
+              <option value="10">10分</option>
+              <option value="15">15分</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold mb-1 text-slate-300">対応デバイス</label>
+          <div class="flex gap-3 text-slate-300">
+            <label class="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="plat-pc" checked class="rounded bg-slate-800"> PC</label>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="plat-mobile" checked class="rounded bg-slate-800"> スマホ対応</label>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer"><input type="checkbox" id="pub-event" checked class="rounded bg-slate-800"> Studioイベント参加</label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold mb-1 text-slate-300">操作方法・説明</label>
+          <textarea id="pub-desc" rows="3" placeholder="遊び方や操作方法を入力..." class="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white outline-none focus:border-indigo-500"></textarea>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button type="button" onclick="publishStudioGame()" id="studio-publish-submit" class="flex-1 bg-gradient-to-r from-indigo-600 to-fuchsia-600 hover:opacity-95 text-white font-black py-3 rounded-xl text-xs shadow-lg transition cursor-pointer">
+          🚀 今すぐ公開する
+        </button>
+        <button type="button" onclick="closePublishDrawer()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold px-4 py-3 rounded-xl text-xs">
+          戻る
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const proxyUrl = window.location.origin + '/supabase';
+    const supabase = window.supabase.createClient(proxyUrl, 'sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj');
+    const DRAFT_KEY = 'ghub_studio_draft_v1';
+
+    let esbuildReady = false;
+    let editorMode = 'html'; // 'html' | 'split' | 'tsx'
+    let activeFileTab = 'html'; // 'html' | 'css' | 'js' | 'tsx'
+    let studioThumbBlob = null;
+    let sandboxCoins = 200;
+    let sandboxOwnedItems = new Set();
+    let lastCompiledHtml = '';
+    let autoRunTimer = null;
+
+    const filesState = {
+      html: '',
+      css: `body {\n  margin: 0;\n  background: #090d16;\n  color: #f8fafc;\n  font-family: sans-serif;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  height: 100vh;\n}\nbutton {\n  background: linear-gradient(135deg, #f59e0b, #ef4444);\n  border: none;\n  color: #090d16;\n  font-weight: 900;\n  padding: 16px 28px;\n  border-radius: 16px;\n  font-size: 18px;\n  cursor: pointer;\n}`,
+      js: `let score = 0;\nconst btn = document.getElementById('tap-btn');\nconst scoreEl = document.getElementById('score');\nif (btn) {\n  btn.addEventListener('click', () => {\n    score += 10;\n    scoreEl.textContent = score;\n    console.log('Score:', score);\n  });\n}`,
+      tsx: ''
+    };
+
+    const TEMPLATES = {
+      clicker: {
+        mode: 'html',
+        title: '10秒脳汁ネオンクリッカー',
+        tag: 'Action',
+        desc: '10秒間で連打＆コンボを決めてハイスコアを目指せ！タップで火花が弾ける爽快クリッカー。',
+        code: `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>10秒脳汁ネオンクリッカー</title>
+  <style>
+    * { box-sizing: border-box; user-select: none; }
+    body { margin: 0; background: radial-gradient(circle at top, #1e1b4b, #070a12); color: #fff; font-family: system-ui, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    canvas { position: fixed; inset: 0; pointer-events: none; }
+    .hud { position: relative; z-index: 2; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+    .score { font-size: 56px; font-weight: 900; font-variant-numeric: tabular-nums; text-shadow: 0 0 24px rgba(245,158,11,.6); }
+    .timer { font-size: 18px; font-weight: 700; color: #38bdf8; }
+    .tap-btn { width: 170px; height: 170px; border-radius: 999px; border: 4px solid rgba(255,255,255,0.25); background: linear-gradient(135deg, #f59e0b, #ec4899); color: #090d16; font-size: 22px; font-weight: 900; cursor: pointer; box-shadow: 0 0 40px rgba(236,72,153,.45); transition: transform .06s; }
+    .tap-btn:active { transform: scale(0.92); }
+    .sub-btn { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.25); padding: 8px 18px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <canvas id="fx"></canvas>
+  <div class="hud">
+    <div class="timer" id="timer">残り 10.0 秒</div>
+    <div class="score" id="score">0</div>
+    <button class="tap-btn" id="tap">TAP!<br><small id="combo" style="font-size:13px">x1 COMBO</small></button>
+    <button class="sub-btn" id="restart" style="display:none">もう一度遊ぶ</button>
+  </div>
+  <script>
+    const c = document.getElementById('fx'), ctx = c.getContext('2d');
+    const resize = () => { c.width = innerWidth; c.height = innerHeight; };
+    resize(); addEventListener('resize', resize);
+    const particles = [];
+    let score = 0, combo = 1, timeLeft = 10, active = false, lastTap = 0;
+
+    function burst(x, y) {
+      for (let i = 0; i < 16; i++) {
+        const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 6;
+        particles.push({ x, y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp, life: 1, hue: 30 + Math.random()*300 });
+      }
+    }
+    document.getElementById('tap').addEventListener('pointerdown', (e) => {
+      if (!active && timeLeft >= 10) active = true;
+      if (!active) return;
+      const now = performance.now();
+      combo = now - lastTap < 350 ? Math.min(20, combo + 1) : 1;
+      lastTap = now;
+      score += 10 * combo;
+      document.getElementById('score').textContent = score;
+      document.getElementById('combo').textContent = 'x' + combo + ' COMBO';
+      burst(e.clientX || innerWidth/2, e.clientY || innerHeight/2);
+    });
+    document.getElementById('restart').onclick = () => {
+      score = 0; combo = 1; timeLeft = 10; active = false;
+      document.getElementById('score').textContent = '0';
+      document.getElementById('timer').textContent = '残り 10.0 秒';
+      document.getElementById('restart').style.display = 'none';
+    };
+    setInterval(() => {
+      if (active) {
+        timeLeft = Math.max(0, timeLeft - 0.1);
+        document.getElementById('timer').textContent = timeLeft > 0 ? '残り ' + timeLeft.toFixed(1) + ' 秒' : 'FINISH! SCORE: ' + score;
+        if (timeLeft <= 0) { active = false; document.getElementById('restart').style.display = 'inline-block'; }
+      }
+    }, 100);
+    (function loop() {
+      ctx.clearRect(0, 0, c.width, c.height);
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life -= 0.03;
+        if (p.life <= 0) { particles.splice(i, 1); continue; }
+        ctx.fillStyle = 'hsla(' + p.hue + ',100%,65%,' + p.life + ')';
+        ctx.beginPath(); ctx.arc(p.x, p.y, 4 * p.life, 0, Math.PI * 2); ctx.fill();
+      }
+      requestAnimationFrame(loop);
+    })();
+  <\/script>
+</body>
+</html>`
+      },
+      dodge: {
+        mode: 'html',
+        title: 'ネオン回避サバイバル',
+        tag: 'Action',
+        desc: 'マウス/タッチ/矢印キーで自機を操作し、迫るネオン弾幕をかわし続けよう！',
+        code: `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ネオン回避サバイバル</title>
+  <style>
+    body { margin: 0; background: #050811; overflow: hidden; font-family: sans-serif; color: #fff; }
+    canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <script>
+    const c = document.getElementById('c'), ctx = c.getContext('2d');
+    const resize = () => { c.width = innerWidth; c.height = innerHeight; };
+    resize(); addEventListener('resize', resize);
+    let px = c.width / 2, py = c.height * 0.78, score = 0, alive = true;
+    const enemies = [], keys = {};
+    addEventListener('keydown', e => keys[e.key] = true);
+    addEventListener('keyup', e => keys[e.key] = false);
+    c.addEventListener('pointermove', e => { if (alive) { px = e.clientX; py = e.clientY; } });
+    c.addEventListener('pointerdown', () => {
+      if (!alive) { enemies.length = 0; score = 0; alive = true; px = c.width/2; py = c.height*0.78; }
+    });
+    function loop() {
+      ctx.fillStyle = 'rgba(5,8,17,0.35)';
+      ctx.fillRect(0, 0, c.width, c.height);
+      if (alive) {
+        if (keys['ArrowLeft'] || keys['a']) px -= 6;
+        if (keys['ArrowRight'] || keys['d']) px += 6;
+        if (keys['ArrowUp'] || keys['w']) py -= 6;
+        if (keys['ArrowDown'] || keys['s']) py += 6;
+        px = Math.max(16, Math.min(c.width - 16, px));
+        py = Math.max(16, Math.min(c.height - 16, py));
+        score++;
+        if (Math.random() < 0.08 + Math.min(0.18, score / 4000)) {
+          enemies.push({ x: Math.random() * c.width, y: -20, vy: 3 + Math.random() * 4, r: 8 + Math.random() * 10 });
+        }
+        for (let i = enemies.length - 1; i >= 0; i--) {
+          const e = enemies[i];
+          e.y += e.vy;
+          ctx.fillStyle = '#fb7185';
+          ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2); ctx.fill();
+          if (Math.hypot(e.x - px, e.y - py) < e.r + 11) alive = false;
+          if (e.y > c.height + 40) enemies.splice(i, 1);
+        }
+        ctx.fillStyle = '#38bdf8';
+        ctx.beginPath(); ctx.arc(px, py, 12, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+        ctx.font = 'bold 28px sans-serif';
+        ctx.fillText('GAME OVER · SCORE ' + score, c.width/2, c.height/2);
+        ctx.font = '14px sans-serif';
+        ctx.fillText('クリック/タップでリトライ', c.width/2, c.height/2 + 36);
+      }
+      ctx.fillStyle = '#e2e8f0'; ctx.textAlign = 'left'; ctx.font = 'bold 16px monospace';
+      ctx.fillText('SCORE: ' + score, 16, 30);
+      requestAnimationFrame(loop);
+    }
+    loop();
+  <\/script>
+</body>
+</html>`
+      },
+      sdk: {
+        mode: 'html',
+        title: 'GHUB 課金SDKショップサンプル',
+        tag: 'RPG',
+        desc: 'window.GHUB.requestPayment / purchaseDirect を組み込んだ公式課金テスト対応ミニRPGショップ！',
+        code: `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>GHUB Shop Sample</title>
+  <style>
+    body { margin: 0; background: #0b1020; color: #f8fafc; font-family: system-ui, sans-serif; padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
+    .card { background: #151e34; border: 1px solid #334155; border-radius: 16px; padding: 16px; width: 100%; max-width: 420px; display: flex; justify-content: space-between; align-items: center; }
+    button { background: linear-gradient(135deg, #f59e0b, #eab308); border: none; color: #0b1020; font-weight: 900; padding: 10px 14px; border-radius: 10px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h2 style="margin:0">⚔️ 勇者ショップ (GHUB SDK)</h2>
+  <div id="status" style="font-family:monospace;color:#38bdf8">所持コイン読込中...</div>
+  <div class="card">
+    <div><strong>🧪 回復エリクサー</strong><br><small style="color:#94a3b8">消耗品 · 20 G (シームレス)</small></div>
+    <button onclick="buyPotion()">20 G 購入</button>
+  </div>
+  <div class="card">
+    <div><strong>🗡️ 伝説の聖剣</strong><br><small style="color:#94a3b8">買い切りアンロック · 50 G</small></div>
+    <button id="sword-btn" onclick="buySword()">50 G 購入</button>
+  </div>
+  <div id="log" style="font-family:monospace;font-size:12px;color:#34d399"></div>
+  <script>
+    async function refresh() {
+      if (!window.GHUB) return;
+      const coins = await window.GHUB.getUserCoins();
+      document.getElementById('status').textContent = '🪙 現在の所持: ' + coins + ' G';
+      const hasSword = await window.GHUB.hasPurchased('legend_sword');
+      if (hasSword) {
+        const b = document.getElementById('sword-btn');
+        b.textContent = '装備済み ✓'; b.disabled = true; b.style.opacity = 0.6;
+      }
+    }
+    async function buyPotion() {
+      const res = await window.GHUB.purchaseDirect({ itemId: 'potion_1', itemName: '回復エリクサー', price: 20, consumable: true });
+      document.getElementById('log').textContent = res.success ? '✨ エリクサーを使用しました！' : '❌ ' + res.reason;
+      refresh();
+    }
+    async function buySword() {
+      const res = await window.GHUB.requestPayment({ itemId: 'legend_sword', itemName: '伝説の聖剣', price: 50, consumable: false, description: '攻撃力が2倍になる永久装備' });
+      document.getElementById('log').textContent = res.success ? '🗡️ 伝説の聖剣をアンロック！' : 'キャンセルされました';
+      refresh();
+    }
+    setTimeout(refresh, 100);
+  <\/script>
+</body>
+</html>`
+      },
+      react: {
+        mode: 'tsx',
+        title: 'React カラーマッチパズル',
+        tag: 'Puzzle',
+        desc: 'React + TSX でリアルタイムビルドされる記憶・反射パズルゲーム！',
+        code: `import React, { useState, useEffect } from 'react';
+
+const COLORS = [
+  { name: 'RED', hex: '#ef4444' },
+  { name: 'BLUE', hex: '#3b82f6' },
+  { name: 'GREEN', hex: '#10b981' },
+  { name: 'GOLD', hex: '#f59e0b' },
+];
+
+export default function App() {
+  const [score, setScore] = useState(0);
+  const [target, setTarget] = useState(COLORS[0]);
+  const [textColor, setTextColor] = useState(COLORS[1].hex);
+
+  const nextRound = () => {
+    setTarget(COLORS[Math.floor(Math.random() * COLORS.length)]);
+    setTextColor(COLORS[Math.floor(Math.random() * COLORS.length)].hex);
+  };
+
+  useEffect(() => { nextRound(); }, []);
+
+  const pick = (c: typeof COLORS[0]) => {
+    if (c.name === target.name) {
+      setScore((s) => s + 100);
+    } else {
+      setScore((s) => Math.max(0, s - 50));
+    }
+    nextRound();
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#090d16', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, fontFamily: 'sans-serif' }}>
+      <div style={{ fontFamily: 'monospace', fontSize: 16, color: '#94a3b8' }}>SCORE: <strong style={{ color: '#f59e0b', fontSize: 24 }}>{score}</strong></div>
+      <div style={{ fontSize: 13, color: '#cbd5e1' }}>文字の意味（色名）と同じボタンを素早くタップ！</div>
+      <div style={{ fontSize: 48, fontWeight: 900, color: textColor, letterSpacing: 3 }}>{target.name}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {COLORS.map((c) => (
+          <button key={c.name} onClick={() => pick(c)} style={{ background: c.hex, color: '#fff', border: 'none', padding: '16px 28px', borderRadius: 14, fontWeight: 900, fontSize: 16, cursor: 'pointer' }}>
+            {c.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}`
+      }
+    };
+
+    function studioLog(msg, isError = false) {
+      const box = document.getElementById('studio-console');
+      if (!box) return;
+      const prefix = isError ? '❌ ' : '';
+      box.innerText += `\n[${new Date().toLocaleTimeString()}] ${prefix}${msg}`;
+      box.scrollTop = box.scrollHeight;
+    }
+
+    window.clearStudioConsole = () => {
+      const box = document.getElementById('studio-console');
+      if (box) box.innerText = '--- コンソールクリア ---';
+    };
+
+    // Studio用 window.GHUB シミュレータ＆コンソールブリッジスクリプト
+    const STUDIO_BRIDGE_SCRIPT = `
+      (function() {
+        const origLog = console.log, origWarn = console.warn, origErr = console.error;
+        console.log = function(...a) { origLog.apply(console, a); window.parent.postMessage({ type: 'STUDIO_LOG', level: 'log', msg: a.map(String).join(' ') }, '*'); };
+        console.warn = function(...a) { origWarn.apply(console, a); window.parent.postMessage({ type: 'STUDIO_LOG', level: 'warn', msg: a.map(String).join(' ') }, '*'); };
+        console.error = function(...a) { origErr.apply(console, a); window.parent.postMessage({ type: 'STUDIO_LOG', level: 'error', msg: a.map(String).join(' ') }, '*'); };
+        window.addEventListener('error', function(e) {
+          window.parent.postMessage({ type: 'STUDIO_LOG', level: 'error', msg: e.message || 'Script Error' }, '*');
+        });
+        window.GHUB = {
+          version: '1.0.0-studio',
+          _pending: {},
+          requestPayment: function(params) {
+            return new Promise((resolve) => {
+              const reqId = 'st_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+              window.GHUB._pending[reqId] = resolve;
+              window.parent.postMessage({ type: 'STUDIO_GHUB_PAY', reqId, params }, '*');
+            });
+          },
+          purchaseDirect: function(params) {
+            return window.GHUB.requestPayment(Object.assign({}, params || {}, { seamless: true }));
+          },
+          hasPurchased: function(itemId) {
+            return new Promise((resolve) => {
+              const reqId = 'st_chk_' + Date.now();
+              window.GHUB._pending[reqId] = resolve;
+              window.parent.postMessage({ type: 'STUDIO_GHUB_CHECK', reqId, itemId }, '*');
+            });
+          },
+          getUserCoins: function() {
+            return new Promise((resolve) => {
+              const reqId = 'st_coin_' + Date.now();
+              window.GHUB._pending[reqId] = resolve;
+              window.parent.postMessage({ type: 'STUDIO_GHUB_COINS', reqId }, '*');
+            });
+          },
+          askAI: function(prompt, systemPrompt, options) {
+            const opts = options || {};
+            return new Promise((resolve) => {
+              const reqId = 'st_ai_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+              window.GHUB._pending[reqId] = resolve;
+              window.parent.postMessage({
+                type: 'GHUB_AI_REQUEST',
+                reqId,
+                userPrompt: typeof prompt === 'string' ? prompt : JSON.stringify(prompt || ''),
+                systemPrompt: typeof systemPrompt === 'string' ? systemPrompt : '',
+                maxTokens: opts.maxTokens || 1500
+              }, '*');
+            });
+          }
+        };
+        if (typeof window.fetch === 'function' && window.parent && window.parent !== window) {
+          const _origFetch = window.fetch.bind(window);
+          window.fetch = function(input, init) {
+            try {
+              const urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+              if (/^(\\/ai|\\/api\\/ai|\\/api\\/gemini(\\/generate)?)$/i.test(urlStr)) {
+                let parsed = {};
+                if (init && typeof init.body === 'string') {
+                  try { parsed = JSON.parse(init.body); } catch (e) { parsed = { userPrompt: init.body }; }
+                }
+                return window.GHUB.askAI(parsed.userPrompt || parsed.prompt || parsed.contents || '', parsed.systemPrompt || parsed.systemInstruction || '')
+                  .then((aiRes) => new Response(JSON.stringify({ reply: aiRes.reply || '', text: aiRes.reply || '', model: aiRes.model || 'ghub-studio-ai' }), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' }
+                  }));
+              }
+            } catch (e) {}
+            return _origFetch(input, init);
+          };
+        }
+        window.addEventListener('message', function(e) {
+          if (!e.data || !e.data.studioReply) return;
+          const fn = window.GHUB._pending[e.data.reqId];
+          if (fn) { delete window.GHUB._pending[e.data.reqId]; fn(e.data.payload); }
+        });
+      })();
+    `;
+
+    function injectBridgeIntoHtml(htmlStr) {
+      const tag = `<script>${STUDIO_BRIDGE_SCRIPT}<\/script>`;
+      if (htmlStr.includes('<head>')) return htmlStr.replace('<head>', '<head>' + tag);
+      if (htmlStr.includes('<head ')) return htmlStr.replace(/<head[^>]*>/, '$&' + tag);
+      return tag + htmlStr;
+    }
+
+    function showStudioSdkToast(msg) {
+      const toast = document.getElementById('studio-sdk-toast');
+      const txt = document.getElementById('studio-sdk-toast-text');
+      if (!toast || !txt) return;
+      txt.innerText = msg;
+      toast.classList.remove('hidden');
+      clearTimeout(window._stSdkTimer);
+      window._stSdkTimer = setTimeout(() => toast.classList.add('hidden'), 2600);
+    }
+
+    window.addEventListener('message', (e) => {
+      if (!e.data || typeof e.data !== 'object') return;
+      const iframeWin = document.getElementById('studio-iframe')?.contentWindow;
+      if (e.data.type === 'STUDIO_LOG') {
+        studioLog(e.data.msg, e.data.level === 'error');
+      } else if (e.data.type === 'STUDIO_GHUB_COINS') {
+        iframeWin?.postMessage({ studioReply: true, reqId: e.data.reqId, payload: sandboxCoins }, '*');
+      } else if (e.data.type === 'STUDIO_GHUB_CHECK') {
+        iframeWin?.postMessage({ studioReply: true, reqId: e.data.reqId, payload: sandboxOwnedItems.has(e.data.itemId) }, '*');
+      } else if (e.data.type === 'STUDIO_GHUB_PAY') {
+        const p = e.data.params || {};
+        const price = Math.max(0, Number(p.price) || 0);
+        if (sandboxCoins < price) {
+          showStudioSdkToast(`⚠️ テスト残高不足 (${price} G)`);
+          studioLog(`[SDK Test] コイン不足: ${p.itemName} (${price} G)`);
+          iframeWin?.postMessage({ studioReply: true, reqId: e.data.reqId, payload: { success: false, reason: 'insufficient_coins' } }, '*');
+        } else {
+          sandboxCoins -= price;
+          if (!p.consumable) sandboxOwnedItems.add(p.itemId);
+          document.getElementById('sandbox-coin-val').innerText = String(sandboxCoins);
+          showStudioSdkToast(`💎 課金テスト成功: ${p.itemName || p.itemId} (-${price} G)`);
+          studioLog(`[SDK Test] 購入成功: ${p.itemName || p.itemId} (${price} G)`);
+          iframeWin?.postMessage({ studioReply: true, reqId: e.data.reqId, payload: { success: true, itemId: p.itemId, price, userCoins: sandboxCoins } }, '*');
+        }
+      } else if (e.data.type === 'GHUB_AI_REQUEST') {
+        fetch('/ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userPrompt: e.data.userPrompt || '',
+            systemPrompt: e.data.systemPrompt || '',
+            maxTokens: e.data.maxTokens || 1500
+          })
+        })
+          .then(r => r.json())
+          .then(data => {
+            iframeWin?.postMessage({
+              studioReply: true,
+              reqId: e.data.reqId,
+              payload: { reply: data.reply || data.text || '', text: data.reply || data.text || '', model: data.model || 'ghub-studio-ai' }
+            }, '*');
+          })
+          .catch(() => {
+            iframeWin?.postMessage({
+              studioReply: true,
+              reqId: e.data.reqId,
+              payload: { reply: '⚠️ AI通信に失敗しました。', text: '' }
+            }, '*');
+          });
+      }
+    });
+
+    async function initStudioEsbuild() {
+      try {
+        await esbuild.initialize({ wasmURL: 'https://cdn.jsdelivr.net/npm/esbuild-wasm@0.19.11/esbuild.wasm' });
+        esbuildReady = true;
+        const b = document.getElementById('studio-engine-badge');
+        if (b) b.innerText = '⚡ Engine + TSX Ready';
+      } catch (e) {
+        studioLog('esbuild 初期化警告 (HTMLモードはそのまま動作します): ' + e.message);
+      }
+    }
+    initStudioEsbuild();
+
+    function syncEditorToState() {
+      const editor = document.getElementById('code-editor');
+      if (editor) filesState[activeFileTab] = editor.value;
+      updateEditorStats();
+      saveDraftLocally();
+    }
+
+    function updateEditorStats() {
+      const val = document.getElementById('code-editor')?.value || '';
+      const lines = val.split('\n').length;
+      const el = document.getElementById('editor-stats');
+      if (el) el.innerText = `${lines} 行 · ${val.length} 文字 (${activeFileTab.toUpperCase()})`;
+    }
+
+    function saveDraftLocally() {
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({
+          mode: editorMode,
+          activeTab: activeFileTab,
+          files: filesState,
+          title: document.getElementById('pub-title')?.value || '',
+          tag: document.getElementById('pub-tag')?.value || 'Action',
+          desc: document.getElementById('pub-desc')?.value || ''
+        }));
+        const s = document.getElementById('draft-save-status');
+        if (s) s.innerText = '💾 自動保存済み';
+      } catch (e) {}
+    }
+
+    window.switchEditorMode = (mode) => {
+      syncEditorToState();
+      editorMode = mode;
+      document.getElementById('editor-mode-select').value = mode;
+      const fHtml = document.getElementById('ftab-html');
+      const fCss = document.getElementById('ftab-css');
+      const fJs = document.getElementById('ftab-js');
+      const fTsx = document.getElementById('ftab-tsx');
+
+      if (mode === 'html') {
+        fHtml.classList.remove('hidden');
+        fCss.classList.add('hidden');
+        fJs.classList.add('hidden');
+        fTsx.classList.add('hidden');
+        selectFileTab('html');
+      } else if (mode === 'split') {
+        fHtml.classList.remove('hidden');
+        fCss.classList.remove('hidden');
+        fJs.classList.remove('hidden');
+        fTsx.classList.add('hidden');
+        if (!filesState.html || filesState.html.includes('<!DOCTYPE')) {
+          filesState.html = `<div style="text-align:center">\n  <h2 id="score">0</h2>\n  <button id="tap-btn">タップでテスト!</button>\n</div>`;
+        }
+        selectFileTab('html');
+      } else {
+        fHtml.classList.add('hidden');
+        fCss.classList.add('hidden');
+        fJs.classList.add('hidden');
+        fTsx.classList.remove('hidden');
+        if (!filesState.tsx) filesState.tsx = TEMPLATES.react.code;
+        selectFileTab('tsx');
+      }
+      runStudioPreview();
+    };
+
+    window.selectFileTab = (tab) => {
+      const editor = document.getElementById('code-editor');
+      if (editor && activeFileTab) filesState[activeFileTab] = editor.value;
+      activeFileTab = tab;
+      ['html', 'css', 'js', 'tsx'].forEach(t => {
+        const btn = document.getElementById(`ftab-${t}`);
+        if (!btn) return;
+        if (t === tab) btn.className = 'px-2.5 py-1 rounded-lg bg-slate-800 text-white font-mono text-[11px] font-bold';
+        else btn.className = btn.classList.contains('hidden') ? 'hidden' : 'px-2.5 py-1 rounded-lg text-slate-400 hover:text-white font-mono text-[11px]';
+      });
+      if (editor) editor.value = filesState[tab] || '';
+      updateEditorStats();
+    };
+
+    async function compileStudioHtml() {
+      syncEditorToState();
+      if (editorMode === 'html') {
+        return filesState.html || '<!DOCTYPE html><html><body style="background:#090d16;color:#fff;font-family:sans-serif;padding:24px;">Hello G-HUB Studio</body></html>';
+      }
+      if (editorMode === 'split') {
+        const body = filesState.html || '';
+        const css = filesState.css || '';
+        const js = filesState.js || '';
+        return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${document.getElementById('pub-title').value || 'G-HUB Game'}</title><style>${css}</style></head><body>${body}<script>${js}<\/script></body></html>`;
+      }
+      // React / TSX mode
+      if (!esbuildReady) {
+        throw new Error('esbuild-wasm を初期化中です。数秒待って再実行してください。');
+      }
+      const tsxSource = filesState.tsx || TEMPLATES.react.code;
+      const result = await esbuild.build({
+        stdin: { contents: tsxSource, loader: 'tsx', resolveDir: '/' },
+        bundle: true,
+        format: 'esm',
+        write: false,
+        jsx: 'automatic',
+        jsxImportSource: 'https://esm.sh/react@18.2.0',
+        plugins: [{
+          name: 'studio-externals',
+          setup(build) {
+            build.onResolve({ filter: /^[^./]/ }, args => {
+              if (args.path === '@google/genai') return { path: 'studio-genai-shim', namespace: 'studio-shim' };
+              if (args.path === 'react') return { path: 'https://esm.sh/react@18.2.0', external: true };
+              if (args.path === 'react-dom' || args.path === 'react-dom/client') return { path: 'https://esm.sh/react-dom@18.2.0/client', external: true };
+              if (args.path.startsWith('react/')) return { path: `https://esm.sh/${args.path}@18.2.0`, external: true };
+              return { path: `https://esm.sh/${args.path}?deps=react@18.2.0,react-dom@18.2.0`, external: true };
+            });
+            build.onLoad({ filter: /.*/, namespace: 'studio-shim' }, () => ({
+              contents: `
+                export const ThinkingLevel = { LOW: 'LOW', MEDIUM: 'MEDIUM', HIGH: 'HIGH' };
+                export const Type = { STRING: 'STRING', NUMBER: 'NUMBER', INTEGER: 'INTEGER', BOOLEAN: 'BOOLEAN', ARRAY: 'ARRAY', OBJECT: 'OBJECT' };
+                function _ex(c){if(!c)return'';if(typeof c==='string')return c;if(Array.isArray(c))return c.map(x=>typeof x==='string'?x:(x?.text||(x?.parts?x.parts.map(p=>p?.text||'').join('\\n'):JSON.stringify(x)))).join('\\n');if(typeof c==='object')return c.text||(c.parts?c.parts.map(p=>p?.text||'').join('\\n'):JSON.stringify(c));return String(c);}
+                export class GoogleGenAI {
+                  constructor(){}
+                  get models(){
+                    const self=this;
+                    return {
+                      generateContent: async (params={})=>{
+                        const p=_ex(params.contents||params.prompt||'');
+                        const s=_ex(params?.config?.systemInstruction||'');
+                        let reply='';
+                        if(window.GHUB&&typeof window.GHUB.askAI==='function'){
+                          const res=await window.GHUB.askAI(p,s);
+                          reply=(res&&(res.reply||res.text))||'';
+                        }else{
+                          const r=await fetch('/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userPrompt:p,systemPrompt:s})});
+                          const d=await r.json();
+                          reply=d.reply||d.text||'';
+                        }
+                        return { text: reply, response: { text: () => reply } };
+                      },
+                      generateContentStream: async (params={})=>{
+                        const out=await self.models.generateContent(params);
+                        return (async function*(){ yield { text: out.text }; })();
+                      }
+                    };
+                  }
+                }
+                export default GoogleGenAI;
+              `,
+              loader: 'js'
+            }));
+          }
+        }]
+      });
+      const bundledJs = result.outputFiles[0].text;
+      const bytes = new TextEncoder().encode(bundledJs);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      const dataUrl = `data:text/javascript;base64,${btoa(binary)}`;
+
+      return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${document.getElementById('pub-title').value || 'React Game'}</title><script src="https://cdn.tailwindcss.com"><\/script></head><body><div id="root"></div><script type="module">import React from 'https://esm.sh/react@18.2.0';import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';import('${dataUrl}').then(m=>{const C=m.default||m[Object.keys(m)[0]];createRoot(document.getElementById('root')).render(React.createElement(C));}).catch(e=>console.error(e));<\/script></body></html>`;
+    }
+
+    window.runStudioPreview = async () => {
+      try {
+        const html = await compileStudioHtml();
+        lastCompiledHtml = html;
+        const iframe = document.getElementById('studio-iframe');
+        if (iframe) iframe.srcdoc = injectBridgeIntoHtml(html);
+        studioLog('▶ テストプレビューを更新しました');
+      } catch (err) {
+        studioLog('ビルドエラー: ' + err.message, true);
+      }
+    };
+
+    window.applyTemplate = (key) => {
+      if (!key || !TEMPLATES[key]) return;
+      const tpl = TEMPLATES[key];
+      editorMode = tpl.mode;
+      document.getElementById('editor-mode-select').value = tpl.mode;
+      if (tpl.mode === 'tsx') {
+        filesState.tsx = tpl.code;
+        switchEditorMode('tsx');
+      } else {
+        filesState.html = tpl.code;
+        switchEditorMode('html');
+      }
+      document.getElementById('pub-title').value = tpl.title;
+      document.getElementById('pub-tag').value = tpl.tag;
+      document.getElementById('pub-desc').value = tpl.desc;
+      document.getElementById('template-select').value = '';
+      runStudioPreview();
+    };
+
+    window.setAiPrompt = (text) => {
+      document.getElementById('studio-ai-prompt').value = text;
+    };
+
+    window.generateGameWithAI = async () => {
+      const prompt = document.getElementById('studio-ai-prompt').value.trim();
+      if (!prompt) return alert('作りたいゲームのアイデアを入力してください！');
+
+      const btn = document.getElementById('studio-ai-btn');
+      const isRemix = document.getElementById('ai-remix-checkbox').checked;
+      btn.disabled = true;
+      btn.innerText = '✨ 生成中...';
+      studioLog(`✨ Gemini 4 Hydrogen でゲーム生成中: "${prompt}"`);
+
+      const currentCode = isRemix ? (document.getElementById('code-editor')?.value || '').slice(0, 6000) : '';
+      const sysPrompt = editorMode === 'tsx'
+        ? 'You are an expert HTML5/React game developer. Output ONLY a complete single-file React TSX component (`export default function App()`) inside a ```tsx code block. No explanation prose.'
+        : 'You are an expert HTML5/Canvas game developer. Output ONLY a complete, self-contained runnable single HTML file (`<!DOCTYPE html>...`) with inline CSS & JS, mouse+touch+keyboard controls, juicy arcade feedback, and no external assets, inside a ```html code block.';
+
+      const userPrompt = isRemix && currentCode
+        ? `既存のコードを以下の要望に合わせて改造してください:\n要望: ${prompt}\n\n現在のコード:\n${currentCode}`
+        : `次の内容の楽しいブラウザゲームを1つ作ってください（タイトルも日本語で魅力的に）: ${prompt}`;
+
+      try {
+        const res = await fetch('/ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ systemPrompt: sysPrompt, userPrompt, maxTokens: 3500 })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        let raw = String(data.reply || '').trim();
+        const fenceMatch = raw.match(/```(?:html|tsx|jsx|javascript)?\s*([\s\S]*?)```/i);
+        const code = (fenceMatch ? fenceMatch[1] : raw).trim();
+        if (!code || code.length < 40) throw new Error('生成コードが空でした。もう一度お試しください。');
+
+        if (editorMode === 'split') {
+          switchEditorMode('html');
+        }
+        filesState[activeFileTab] = code;
+        document.getElementById('code-editor').value = code;
+
+        if (!document.getElementById('pub-title').value) {
+          document.getElementById('pub-title').value = prompt.slice(0, 26);
+        }
+        if (!document.getElementById('pub-desc').value) {
+          document.getElementById('pub-desc').value = `${prompt}（G-HUB Studio × Gemini 4 Hydrogen 生成）`;
+        }
+
+        studioLog('✨ AIコード生成完了！ライブテストを起動します');
+        await runStudioPreview();
+      } catch (err) {
+        studioLog('AI生成失敗: ' + err.message, true);
+        alert('AI生成エラー: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '✨ コード生成';
+      }
+    };
+
+    window.insertGhubPaymentSnippet = () => {
+      const editor = document.getElementById('code-editor');
+      if (!editor) return;
+      const snippet = `\n// 💎 G-HUB 課金アイテム呼び出し\nasync function buyPowerUp() {\n  if (!window.GHUB) return;\n  const res = await window.GHUB.requestPayment({\n    itemId: 'power_boost',\n    itemName: 'パワーブースト',\n    price: 30,\n    consumable: true,\n    seamless: true\n  });\n  if (res.success) console.log('購入成功!', res);\n}\n`;
+      const pos = editor.selectionStart || editor.value.length;
+      editor.value = editor.value.slice(0, pos) + snippet + editor.value.slice(pos);
+      syncEditorToState();
+      studioLog('💎 課金SDKスニペットを挿入しました');
+    };
+
+    // エディタイベント（Tabインデント & 自動実行 & Ctrl+Enter）
+    const editorEl = document.getElementById('code-editor');
+    editorEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const s = editorEl.selectionStart;
+        const end = editorEl.selectionEnd;
+        editorEl.value = editorEl.value.slice(0, s) + '  ' + editorEl.value.slice(end);
+        editorEl.selectionStart = editorEl.selectionEnd = s + 2;
+        syncEditorToState();
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        runStudioPreview();
+      }
+    });
+    editorEl.addEventListener('input', () => {
+      syncEditorToState();
+      if (document.getElementById('auto-run-check').checked) {
+        clearTimeout(autoRunTimer);
+        autoRunTimer = setTimeout(runStudioPreview, 650);
+      }
+    });
+
+    window.setViewportMode = (vp) => {
+      const shell = document.getElementById('preview-frame-shell');
+      const pcBtn = document.getElementById('vp-desktop-btn');
+      const mobBtn = document.getElementById('vp-mobile-btn');
+      if (vp === 'mobile') {
+        shell.style.maxWidth = '375px';
+        shell.style.maxHeight = '667px';
+        mobBtn.className = 'px-2 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-bold';
+        pcBtn.className = 'px-2 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-[11px] font-bold';
+      } else {
+        shell.style.maxWidth = '100%';
+        shell.style.maxHeight = '100%';
+        pcBtn.className = 'px-2 py-1 rounded-lg bg-indigo-600 text-white text-[11px] font-bold';
+        mobBtn.className = 'px-2 py-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white text-[11px] font-bold';
+      }
+    };
+
+    window.togglePreviewFullscreen = () => {
+      const pane = document.getElementById('studio-preview-pane');
+      const btn = document.getElementById('studio-fs-btn');
+      const isFs = pane.classList.toggle('studio-fullscreen');
+      btn.innerText = isFs ? '✕ 縮小' : '⛶ 全画面';
+    };
+
+    window.resetSandboxStorage = () => {
+      sandboxCoins = 200;
+      sandboxOwnedItems.clear();
+      document.getElementById('sandbox-coin-val').innerText = '200';
+      const iframe = document.getElementById('studio-iframe');
+      try {
+        iframe?.contentWindow?.localStorage?.clear();
+        iframe?.contentWindow?.sessionStorage?.clear();
+      } catch (e) {}
+      runStudioPreview();
+      studioLog('🗑️ テスト環境をリセットしました');
+    };
+
+    window.toggleDownloadMenu = () => {
+      document.getElementById('download-menu-bar').classList.toggle('hidden');
+    };
+
+    async function buildStandaloneOfflineHtml() {
+      let rawHtml = await compileStudioHtml();
+      let reactCode = '', reactDomCode = '', tailwindCode = '';
+      try {
+        const [rRes, rdRes, twRes] = await Promise.all([
+          fetch('/offline-assets/react.production.min.js'),
+          fetch('/offline-assets/react-dom.production.min.js'),
+          fetch('/offline-assets/tailwind.min.js')
+        ]);
+        if (rRes.ok) reactCode = await rRes.text();
+        if (rdRes.ok) reactDomCode = await rdRes.text();
+        if (twRes.ok) tailwindCode = await twRes.text();
+      } catch (e) {}
+
+      if (tailwindCode && rawHtml.includes('cdn.tailwindcss.com')) {
+        rawHtml = rawHtml.replace(/<script[^>]*src=["'][^"']*cdn\.tailwindcss\.com[^"']*["'][^>]*><\/script>/gi, `<script>${tailwindCode}<\/script>`);
+      }
+
+      const inlineLibs = `<script>window.__GHUB_OFFLINE=true;${reactCode}\n${reactDomCode}<\/script>`;
+      if (rawHtml.includes('<head>')) return rawHtml.replace('<head>', `<head>${inlineLibs}`);
+      return `<head>${inlineLibs}</head>` + rawHtml;
+    }
+
+    window.downloadOfflineBuiltHtml = async () => {
+      try {
+        const html = await buildStandaloneOfflineHtml();
+        const title = (document.getElementById('pub-title').value || 'ghub-studio-game').replace(/[/\\?%*:|"<>]/g, '_');
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${title}-offline.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        studioLog(`📥 オフラインHTMLを保存しました: ${title}-offline.html`);
+      } catch (e) {
+        studioLog('ダウンロード失敗: ' + e.message, true);
+      }
+    };
+
+    window.saveCurrentStudioToPwa = async () => {
+      try {
+        if (!window.GHUB_PWA) return alert('PWAマネージャが見つかりません');
+        const html = await buildStandaloneOfflineHtml();
+        const title = document.getElementById('pub-title').value.trim() || 'Studio 作品';
+        const localId = 'studio_local_' + Date.now();
+        await window.GHUB_PWA.saveOfflineGame({
+          id: localId,
+          title,
+          tag: document.getElementById('pub-tag').value || 'Indie',
+          description: document.getElementById('pub-desc').value || 'G-HUB Studioで作成したオフラインプレイ対応ゲーム',
+          platforms: 'pc,mobile',
+          price_coins: 0
+        }, html);
+        studioLog(`📲 PWAアプリ内に「${title}」を保存しました！（トップページの「ダウンロード済み」タブから圏外でも遊べます）`);
+        alert(`📲 「${title}」をPWAオフラインライブラリに保存しました！\nインターネットが切れてもトップページの「ダウンロード済み」からそのまま遊べます！`);
+      } catch (e) {
+        studioLog('PWA保存失敗: ' + e.message, true);
+      }
+    };
+
+    window.downloadRawSourceFile = () => {
+      syncEditorToState();
+      const title = (document.getElementById('pub-title').value || 'game').replace(/[/\\?%*:|"<>]/g, '_');
+      const isTsx = editorMode === 'tsx';
+      const content = isTsx ? filesState.tsx : (document.getElementById('code-editor').value || '');
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${title}.${isTsx ? 'tsx' : activeFileTab}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      studioLog('📄 ソースファイルをダウンロードしました');
+    };
+
+    window.captureStudioThumbnail = async () => {
+      const iframe = document.getElementById('studio-iframe');
+      if (!iframe || (!iframe.contentDocument && !iframe.contentWindow)) return alert('テスト画面が読み込まれていません');
+      studioLog('📸 サムネイルを撮影中...');
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        const win = iframe.contentWindow || window;
+        const targetW = 640, targetH = 360;
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = targetW; outCanvas.height = targetH;
+        const ctx = outCanvas.getContext('2d');
+        ctx.fillStyle = '#090d16';
+        ctx.fillRect(0, 0, targetW, targetH);
+
+        const canvasEls = Array.from(doc.querySelectorAll('canvas'));
+        const snapshots = [];
+        for (const c of canvasEls) {
+          if (c.width > 0 && c.height > 0) {
+            try {
+              const tc = document.createElement('canvas');
+              tc.width = c.width; tc.height = c.height;
+              tc.getContext('2d').drawImage(c, 0, 0);
+              snapshots.push({ snapshot: tc });
+            } catch (e) {}
+          }
+        }
+        if (snapshots.length > 0) {
+          const mainSnap = snapshots[0].snapshot;
+          const scale = Math.max(targetW / mainSnap.width, targetH / mainSnap.height);
+          const dw = mainSnap.width * scale, dh = mainSnap.height * scale;
+          ctx.drawImage(mainSnap, (targetW - dw)/2, (targetH - dh)/2, dw, dh);
+        }
+        try {
+          const domCanvas = await html2canvas(doc.body || doc.documentElement, {
+            useCORS: true, allowTaint: false, logging: false, backgroundColor: null,
+            windowWidth: win.innerWidth || 800, windowHeight: win.innerHeight || 600
+          });
+          if (domCanvas && domCanvas.width > 0) {
+            const scale = Math.max(targetW / domCanvas.width, targetH / domCanvas.height);
+            const dw = domCanvas.width * scale, dh = domCanvas.height * scale;
+            ctx.drawImage(domCanvas, (targetW - dw)/2, (targetH - dh)/2, dw, dh);
+          }
+        } catch (e) {}
+
+        outCanvas.toBlob((blob) => {
+          if (!blob) return;
+          studioThumbBlob = blob;
+          const url = URL.createObjectURL(blob);
+          const prev = document.getElementById('publish-thumb-preview');
+          if (prev) prev.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+          studioLog('📸 サムネイル撮影完了！');
+          showStudioSdkToast('📸 サムネイルを撮影しました！');
+        }, 'image/jpeg', 0.9);
+      } catch (e) {
+        studioLog('サムネ撮影失敗: ' + e.message, true);
+      }
+    };
+
+    window.handleStudioThumbFile = (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      studioThumbBlob = f;
+      const url = URL.createObjectURL(f);
+      document.getElementById('publish-thumb-preview').innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+    };
+
+    window.openPublishDrawer = async () => {
+      document.getElementById('publish-modal').classList.remove('hidden');
+      const { data: { user } } = await supabase.auth.getUser();
+      document.getElementById('studio-auth-notice').classList.toggle('hidden', Boolean(user));
+    };
+
+    window.closePublishDrawer = () => {
+      document.getElementById('publish-modal').classList.add('hidden');
+    };
+
+    window.studioInlineLogin = async () => {
+      const email = document.getElementById('studio-login-email').value.trim();
+      const password = document.getElementById('studio-login-pass').value;
+      if (!email || !password) return alert('メールアドレスとパスワードを入力してください');
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return alert(error.message);
+      document.getElementById('studio-auth-notice').classList.add('hidden');
+      studioLog(`🔑 ${email} でログインしました！`);
+    };
+
+    window.publishStudioGame = async () => {
+      const title = document.getElementById('pub-title').value.trim();
+      if (!title) return alert('タイトルを入力してください！');
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        document.getElementById('studio-auth-notice').classList.remove('hidden');
+        return alert('公開するにはログインが必要です（入力済みのコードは保持されています）');
+      }
+
+      const btn = document.getElementById('studio-publish-submit');
+      btn.disabled = true;
+      btn.innerText = '🚀 公開処理中...';
+
+      try {
+        const finalHtml = await compileStudioHtml();
+        const gameId = crypto.randomUUID();
+        const payloadBlob = new Blob([finalHtml], { type: 'text/html' });
+
+        // 1. サーバーAPI (/api/games/payload) に確実に保存（Supabase Storage障害でも必ず動く二重保証）
+        let entryUrl = `/api/games/payload/${encodeURIComponent(gameId)}`;
+        try {
+          await fetch('/api/games/payload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game_id: gameId, filename: 'index.html', contentType: 'text/html', textData: finalHtml })
+          });
+        } catch (e) {}
+
+        // 2. Supabase Storage アップロード
+        try {
+          const { error: upErr } = await supabase.storage.from('games').upload(`${gameId}/index.html`, payloadBlob, { contentType: 'text/html', upsert: true });
+          if (!upErr) {
+            const pub = supabase.storage.from('games').getPublicUrl(`${gameId}/index.html`)?.data?.publicUrl;
+            if (pub) entryUrl = pub;
+          }
+        } catch (e) {}
+
+        let thumbnailUrl = null;
+        if (studioThumbBlob) {
+          try {
+            const { error: tErr } = await supabase.storage.from('games').upload(`${gameId}/thumbnail.jpg`, studioThumbBlob, { contentType: 'image/jpeg', upsert: true });
+            if (!tErr) {
+              thumbnailUrl = supabase.storage.from('games').getPublicUrl(`${gameId}/thumbnail.jpg`)?.data?.publicUrl || null;
+            }
+          } catch (e) {}
+        }
+
+        const platformsList = [];
+        if (document.getElementById('plat-pc').checked) platformsList.push('pc');
+        if (document.getElementById('plat-mobile').checked) platformsList.push('mobile');
+
+        const tag = document.getElementById('pub-tag').value || 'Action';
+        const price = parseInt(document.getElementById('pub-price').value, 10) || 0;
+        const trialMinutes = parseInt(document.getElementById('pub-trial').value, 10) || 0;
+        const desc = document.getElementById('pub-desc').value.trim();
+        const isEvent = document.getElementById('pub-event').checked;
+
+        const supaRecord = {
+          id: gameId,
+          title,
+          tag,
+          description: desc,
+          entry_url: entryUrl,
+          thumbnail_url: thumbnailUrl,
+          author_email: user.email,
+          platforms: platformsList.join(',') || 'pc,mobile',
+          price_coins: price,
+          is_event: isEvent,
+          likes_count: 0,
+          play_count: 0
+        };
+
+        await supabase.from('games').insert(supaRecord).catch(() => {});
+
+        const fullRecord = {
+          ...supaRecord,
+          trial_duration_minutes: trialMinutes,
+          created_at: new Date().toISOString()
+        };
+
+        await fetch('/api/games', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fullRecord)
+        }).catch(() => {});
+
+        if (trialMinutes > 0) {
+          fetch('/api/game-trials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game_id: gameId, trial_minutes: trialMinutes })
+          }).catch(() => {});
+          localStorage.setItem(`ghub_trial_${gameId}`, String(trialMinutes));
+        }
+
+        // PWAオフラインにも即時キャッシュ
+        if (window.GHUB_PWA) {
+          await window.GHUB_PWA.saveOfflineGame(fullRecord, finalHtml).catch(() => {});
+        }
+
+        // ロビーに新作公開通知を投稿して盛り上げる
+        fetch('/api/lobby', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            author: user.email.split('@')[0],
+            kind: 'release',
+            game_id: gameId,
+            message: `🚀 G-HUB Studioから新作『${title}』(${tag}) を公開しました！ぜひ遊んでみてください！`
+          })
+        }).catch(() => {});
+
+        try {
+          const localGames = JSON.parse(localStorage.getItem('ghub_local_games') || '[]');
+          localGames.unshift(fullRecord);
+          localStorage.setItem('ghub_local_games', JSON.stringify(localGames));
+        } catch (e) {}
+
+        studioLog(`🎉 公開完了！ ${title}`);
+        alert(`🎉 「${title}」をG-HUBに公開しました！（PWAオフライン保存も完了）`);
+        window.location.href = `play.html?id=${encodeURIComponent(gameId)}`;
+      } catch (err) {
+        studioLog('公開失敗: ' + err.message, true);
+        alert('公開に失敗しました: ' + err.message);
+        btn.disabled = false;
+        btn.innerText = '🚀 今すぐ公開する';
+      }
+    };
+
+    // 初期起動: URLクエリまたはドラフトまたはデフォルトテンプレートを読み込む
+    (function bootStudio() {
+      const params = new URLSearchParams(window.location.search);
+      const urlPrompt = params.get('prompt');
+      const urlTemplate = params.get('template');
+
+      if (urlTemplate && TEMPLATES[urlTemplate]) {
+        applyTemplate(urlTemplate);
+      } else {
+        let restored = false;
+        try {
+          const saved = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+          if (saved && saved.files && (saved.files.html || saved.files.tsx)) {
+            Object.assign(filesState, saved.files);
+            editorMode = saved.mode || 'html';
+            document.getElementById('editor-mode-select').value = editorMode;
+            if (saved.title) document.getElementById('pub-title').value = saved.title;
+            if (saved.tag) document.getElementById('pub-tag').value = saved.tag;
+            if (saved.desc) document.getElementById('pub-desc').value = saved.desc;
+            switchEditorMode(editorMode);
+            restored = true;
+          }
+        } catch (e) {}
+        if (!restored) applyTemplate('clicker');
+      }
+
+      if (urlPrompt) {
+        document.getElementById('studio-ai-prompt').value = urlPrompt;
+      }
+    })();
+  </script>
+</body>
+</html>

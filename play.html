@@ -23,6 +23,7 @@
   <link rel="shortcut icon" href="/favicon.ico">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="manifest" href="/manifest.json">
+  <script src="/ghub-pwa.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -91,9 +92,14 @@
     
     <!-- ヘッダー -->
     <div class="play-header-bar flex flex-wrap justify-between items-center gap-2 mb-3 pb-3 border-b border-[#333]">
-      <a href="index.html" class="text-indigo-400 hover:underline font-bold text-xs flex items-center gap-1">
-        <span>←</span> トップ一覧へ戻る
-      </a>
+      <div class="flex items-center gap-3">
+        <a href="index.html" class="text-indigo-400 hover:underline font-bold text-xs flex items-center gap-1">
+          <span>←</span> トップ一覧へ戻る
+        </a>
+        <a href="studio.html" class="text-emerald-400 hover:underline font-bold text-xs flex items-center gap-1">
+          <span>🛠️</span> GHUB Studio
+        </a>
+      </div>
       
       <div id="author-controls" class="hidden flex items-center gap-2">
         <button onclick="openEditModal()" class="bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition flex items-center gap-1 shadow">
@@ -622,20 +628,36 @@
       </div>
 
       <div class="space-y-3">
+        <!-- 選択肢 0: PWAアプリ内に保存（圏外オフライン対応） -->
+        <div class="bg-[#1e1e1e] p-4 rounded-2xl border border-emerald-500/40 space-y-2 relative overflow-hidden">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-white text-sm flex items-center gap-1.5">
+              <span>📲</span> PWAアプリ内に保存
+            </span>
+            <span class="bg-emerald-500 text-slate-950 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">機内モード対応</span>
+          </div>
+          <p class="text-[11px] text-slate-300 leading-relaxed">
+            G-HUBアプリ（IndexedDB）に直接保存します。圏外やオフライン時でも、ホームの「📥 保存済み」からすぐ起動できます！
+          </p>
+          <button onclick="saveCurrentGameToPwa()" id="btn-dl-pwa-save" class="w-full mt-2 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:opacity-95 text-slate-950 font-black py-2.5 rounded-xl text-xs shadow flex items-center justify-center gap-2 transition">
+            <span>✈️</span> PWAアプリ内にオフライン保存
+          </button>
+        </div>
+
         <!-- 選択肢 1: 完全オフラインHTML -->
         <div class="bg-[#1e1e1e] p-4 rounded-2xl border border-indigo-500/40 space-y-2 relative overflow-hidden">
           <div class="flex items-center justify-between">
             <span class="font-bold text-white text-sm flex items-center gap-1.5">
               <span>📦</span> 完全オフラインHTML
             </span>
-            <span class="bg-indigo-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">推奨</span>
+            <span class="bg-indigo-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">単体ファイル</span>
           </div>
           <p class="text-[11px] text-slate-300 leading-relaxed">
             必要なJSライブラリ（React, ReactDOM, Tailwind CSS）がすべてHTML内に同梱されます。<br>
-            インターネット接続が切れた状態や機内モードでも、ブラウザでダブルクリックするだけでそのまま動作します！
+            ブラウザでダブルクリックするだけでそのまま動作し、同時にPWA内にも保存されます！
           </p>
-          <button onclick="executeDownloadOfflineHtml()" id="btn-dl-offline-html" class="w-full mt-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:opacity-95 text-white font-black py-2.5 rounded-xl text-xs shadow flex items-center justify-center gap-2 transition">
-            <span>⚡</span> 完全オフラインHTMLを保存 (.html)
+          <button onclick="executeDownloadOfflineHtml()" id="btn-dl-offline-html" class="w-full mt-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-95 text-white font-black py-2.5 rounded-xl text-xs shadow flex items-center justify-center gap-2 transition">
+            <span>⚡</span> 完全オフラインHTMLを書き出す (.html)
           </button>
         </div>
 
@@ -1325,6 +1347,43 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
             });
           },
 
+          // 6. G-AI ブリッジ（アップロードされたAIゲーム・srcdoc・PWAでも安定動作）
+          askAI: function(prompt, systemPrompt, options) {
+            var opts = options || {};
+            var userPromptStr = typeof prompt === 'string' ? prompt : JSON.stringify(prompt || '');
+            var sysPromptStr = typeof systemPrompt === 'string' ? systemPrompt : '';
+            if (!window.parent || window.parent === window) {
+              return fetch('/ai', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  userPrompt: userPromptStr,
+                  systemPrompt: sysPromptStr,
+                  maxTokens: opts.maxTokens || 1500
+                })
+              }).then(function(r) { return r.json(); });
+            }
+            return new Promise(function(resolve) {
+              var reqId = 'ghub_ai_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+              var timer = setTimeout(function() {
+                if (window.GHUB._pendingRequests[reqId]) {
+                  delete window.GHUB._pendingRequests[reqId];
+                  resolve({ reply: 'AI応答がタイムアウトしました。もう一度お試しください。', text: '', error: 'timeout' });
+                }
+              }, 20000);
+              window.GHUB._pendingRequests[reqId] = {
+                resolve: function(res) { clearTimeout(timer); resolve(res); }
+              };
+              window.parent.postMessage({
+                type: 'GHUB_AI_REQUEST',
+                requestId: reqId,
+                userPrompt: userPromptStr,
+                systemPrompt: sysPromptStr,
+                maxTokens: opts.maxTokens || 1500
+              }, '*');
+            });
+          },
+
           on: function(event, callback) {
             if (!window.GHUB._listeners[event]) window.GHUB._listeners[event] = [];
             window.GHUB._listeners[event].push(callback);
@@ -1335,6 +1394,34 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
             list.forEach(function(fn) { try { fn(data); } catch(e) {} });
           }
         };
+
+        // srcdoc iframe 内からの相対AIリクエスト (/ai, /api/ai, /api/gemini*) を親G-HUB経由へ自動ルーティング
+        if (typeof window.fetch === 'function' && window.parent && window.parent !== window) {
+          var _origFetch = window.fetch.bind(window);
+          window.fetch = function(input, init) {
+            try {
+              var urlStr = typeof input === 'string' ? input : (input && input.url ? input.url : '');
+              if (/^(\\/ai|\\/api\\/ai|\\/api\\/gemini(\\/generate)?)$/i.test(urlStr)) {
+                var parsedBody = {};
+                if (init && typeof init.body === 'string') {
+                  try { parsedBody = JSON.parse(init.body); } catch (err) { parsedBody = { userPrompt: init.body }; }
+                }
+                var uPrompt = parsedBody.userPrompt || parsedBody.prompt || parsedBody.message || parsedBody.contents || '';
+                var sPrompt = parsedBody.systemPrompt || parsedBody.systemInstruction || parsedBody.system || '';
+                return window.GHUB.askAI(uPrompt, sPrompt, { maxTokens: parsedBody.maxTokens || parsedBody.max_tokens })
+                  .then(function(aiRes) {
+                    var payload = JSON.stringify({
+                      reply: aiRes.reply || aiRes.text || '',
+                      text: aiRes.reply || aiRes.text || '',
+                      model: aiRes.model || 'ghub-bridge'
+                    });
+                    return new Response(payload, { status: 200, headers: { 'Content-Type': 'application/json' } });
+                  });
+              }
+            } catch (e) {}
+            return _origFetch(input, init);
+          };
+        }
 
         window.addEventListener('message', function(e) {
           if (!e.data || typeof e.data !== 'object') return;
@@ -1387,6 +1474,12 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
             if (req) {
               delete window.GHUB._pendingRequests[d.requestId];
               req.resolve({ success: Boolean(d.success), amount: d.amount });
+            }
+          } else if (d.type === 'GHUB_AI_RESPONSE') {
+            var req = window.GHUB._pendingRequests[d.requestId];
+            if (req) {
+              delete window.GHUB._pendingRequests[d.requestId];
+              req.resolve({ reply: d.reply || '', text: d.reply || '', model: d.model || 'ghub-ai', error: d.error || null });
             }
           }
         });
@@ -1945,6 +2038,36 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
           }, '*');
         }
       }
+      // 🤖 ゲーム内AI呼び出しプロキシ
+      if (e.data.type === 'GHUB_AI_REQUEST') {
+        fetch('/ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userPrompt: e.data.userPrompt || '',
+            systemPrompt: e.data.systemPrompt || '',
+            maxTokens: e.data.maxTokens || 1500
+          })
+        })
+          .then(r => r.json())
+          .then(data => {
+            iframe.contentWindow?.postMessage({
+              type: 'GHUB_AI_RESPONSE',
+              requestId: e.data.requestId,
+              reply: data.reply || data.text || '',
+              model: data.model || 'ghub-ai',
+              error: data.error || null
+            }, '*');
+          })
+          .catch(err => {
+            iframe.contentWindow?.postMessage({
+              type: 'GHUB_AI_RESPONSE',
+              requestId: e.data.requestId,
+              reply: '⚠️ オフラインまたは接続エラーのためAI応答を取得できませんでした。',
+              error: err.message
+            }, '*');
+          });
+      }
     });
 
     async function initEsbuild() {
@@ -1957,35 +2080,46 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
         log("✅ esbuild-wasm の初期化が完了しました。");
         loadAndRunGame();
       } catch (e) {
-        log("❌ esbuild 初期化失敗: " + e.message);
+        log("⚠️ esbuild 初期化スキップ（オフラインまたはキャッシュ実行モード）: " + e.message);
+        loadAndRunGame();
       }
     }
 
     async function loadAndRunGame() {
       if (!gameId) return;
       let game = null;
+      let offlineSavedRecord = null;
       try {
-        const { data, error } = await supabase.from('games').select('*').eq('id', gameId).single();
-        if (!error && data) game = data;
+        offlineSavedRecord = await window.GHUB_PWA?.getOfflineGame?.(gameId);
       } catch (e) {}
 
-      // Supabaseに無い場合、サーバーAPI (/api/games) から取得
-      if (!game) {
+      if (navigator.onLine) {
         try {
-          const res = await fetch(`/api/games?id=${encodeURIComponent(gameId)}`);
-          if (res.ok) {
-            const serverGame = await res.json();
-            if (serverGame && serverGame.id) game = serverGame;
-          }
+          const { data, error } = await supabase.from('games').select('*').eq('id', gameId).single();
+          if (!error && data) game = data;
         } catch (e) {}
+
+        // Supabaseに無い場合、サーバーAPI (/api/games) から取得
+        if (!game) {
+          try {
+            const res = await fetch(`/api/games?id=${encodeURIComponent(gameId)}`);
+            if (res.ok) {
+              const serverGame = await res.json();
+              if (serverGame && serverGame.id) game = serverGame;
+            }
+          } catch (e) {}
+        }
       }
 
-      // それでも無い場合、ローカルストレージから取得
+      // それでも無い場合、ローカルストレージまたはPWA保存済みIndexedDBから取得
       if (!game) {
         try {
           const localGames = JSON.parse(localStorage.getItem('ghub_local_games') || '[]');
           game = localGames.find(g => g.id === gameId);
         } catch (e) {}
+      }
+      if (!game && offlineSavedRecord) {
+        game = offlineSavedRecord;
       }
 
       if (!game) return alert('ゲームが見つかりませんでした');
@@ -2142,57 +2276,73 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
         targetUrl = targetUrl.replace(/https:\/\/[^/]+\.supabase\.co/, window.location.origin + '/supabase');
       }
 
-      try {
-        const response = await fetch(targetUrl);
-        if (!response.ok) {
-          throw new Error(`ゲームファイルの取得に失敗しました (Status: ${response.status} ${response.statusText})`);
-        }
+      const launchOfflineSavedHtml = () => {
+        if (!offlineSavedRecord || !offlineSavedRecord.html) return false;
+        log("✈️ PWAオフライン保存データからゲームを起動します！");
+        statusEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-cyan-400"></span> ✈️ PWAオフライン保存版でプレイ中';
+        iframe.srcdoc = injectGHubRuntimeIntoHtml(offlineSavedRecord.html);
+        log("🚀 オフラインゲーム起動完了！");
+        setTimeout(focusIframe, 150);
+        return true;
+      };
 
-        const arrayBuffer = await response.arrayBuffer();
-        const uint8 = new Uint8Array(arrayBuffer);
+      if (!navigator.onLine && launchOfflineSavedHtml()) {
+        // オフラインでもPWAキャッシュ済みゲームを即起動
+      } else {
+        try {
+          if (!targetUrl) throw new Error('エントリーURLがありません');
+          const response = await fetch(targetUrl);
+          if (!response.ok) {
+            throw new Error(`ゲームファイルの取得に失敗しました (Status: ${response.status} ${response.statusText})`);
+          }
 
-        const isZip = uint8.length >= 4 && uint8[0] === 0x50 && uint8[1] === 0x4B;
+          const arrayBuffer = await response.arrayBuffer();
+          const uint8 = new Uint8Array(arrayBuffer);
 
-        if (isZip) {
-          log("⚡ Zipファイルを検出。v9 エンジンで展開・バンドルします...");
-          await processZipArrayBuffer(arrayBuffer);
-        } else {
-          const textData = new TextDecoder('utf-8').decode(uint8);
-          if (textData.includes('<!DOCTYPE html>') || textData.includes('<html') || textData.includes('<head>') || textData.includes('<body>') || textData.includes('<script')) {
-            // 過去の失効したBlob URLが含まれている場合の検出 & 親切なガイド
-            if (textData.includes("import('blob:") || textData.includes('import("blob:')) {
-              log("⚠️ 古いBlob URL形式のデータを検出しました。一時Blobが失効しています。");
-              iframe.srcdoc = `
-                <body style="background:#0b0f19;color:#fff;font-family:sans-serif;padding:32px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;">
-                  <div style="max-width:440px;background:#1e1e1e;border:1px solid #333;border-radius:16px;padding:24px;box-shadow:0 10px 25px rgba(0,0,0,0.5);">
-                    <span style="font-size:36px;display:block;margin-bottom:8px;">⚠️</span>
-                    <h3 style="font-size:15px;font-weight:bold;color:#f59e0b;margin:0 0 8px 0;">一時モジュール（Blob）が期限切れです</h3>
-                    <p style="font-size:11px;color:#94a3b8;line-height:1.6;margin:0 0 16px 0;">
-                      前バージョンのアップローダーで投稿されたため、一時的なBlob URLが失効しています。<br>
-                      作者の方は上部の<strong>「✏️ ゲーム編集 / アップデート」</strong>からファイルを再度選択して保存すると、最新の永続形式（Base64 Data URL）に自動修復され、正常に遊べるようになります！
-                    </p>
-                    <button onclick="window.parent.openEditModal()" style="background:#4f46e5;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:bold;cursor:pointer;">
-                      ✏️ ゲーム編集を開いて再アップロード
-                    </button>
-                  </div>
-                </body>
-              `;
-            } else {
-              log("⚡ 単一HTMLゲームを検出。展開して実行します...");
-              iframe.srcdoc = injectGHubRuntimeIntoHtml(textData);
-              log("🚀 ゲーム起動完了！");
-              setTimeout(focusIframe, 150);
-            }
+          const isZip = uint8.length >= 4 && uint8[0] === 0x50 && uint8[1] === 0x4B;
+
+          if (isZip) {
+            log("⚡ Zipファイルを検出。v9 エンジンで展開・バンドルします...");
+            await processZipArrayBuffer(arrayBuffer);
           } else {
-            log(`⚠️ 取得されたデータがHTML/Zipではありません。\n内容: ${textData.slice(0, 150)}`);
-            iframe.srcdoc = `<body style="background:#0b0f19;color:#ff6b6b;font-family:sans-serif;padding:24px;text-align:center;">
-              <h3>⚠️ ゲームファイルの読み込みに失敗しました</h3>
-              <p style="color:#aaa;font-size:12px;">アップロードされたファイルが有効なHTMLまたはZipファイルか確認してください。</p>
-            </body>`;
+            const textData = new TextDecoder('utf-8').decode(uint8);
+            if (textData.includes('<!DOCTYPE html>') || textData.includes('<html') || textData.includes('<head>') || textData.includes('<body>') || textData.includes('<script')) {
+              if (textData.includes("import('blob:") || textData.includes('import("blob:')) {
+                log("⚠️ 古いBlob URL形式のデータを検出しました。一時Blobが失効しています。");
+                iframe.srcdoc = `
+                  <body style="background:#0b0f19;color:#fff;font-family:sans-serif;padding:32px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;">
+                    <div style="max-width:440px;background:#1e1e1e;border:1px solid #333;border-radius:16px;padding:24px;box-shadow:0 10px 25px rgba(0,0,0,0.5);">
+                      <span style="font-size:36px;display:block;margin-bottom:8px;">⚠️</span>
+                      <h3 style="font-size:15px;font-weight:bold;color:#f59e0b;margin:0 0 8px 0;">一時モジュール（Blob）が期限切れです</h3>
+                      <p style="font-size:11px;color:#94a3b8;line-height:1.6;margin:0 0 16px 0;">
+                        前バージョンのアップローダーで投稿されたため、一時的なBlob URLが失効しています。<br>
+                        作者の方は上部の<strong>「✏️ ゲーム編集 / アップデート」</strong>からファイルを再度選択して保存すると、最新の永続形式（Base64 Data URL）に自動修復され、正常に遊べるようになります！
+                      </p>
+                      <button onclick="window.parent.openEditModal()" style="background:#4f46e5;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:bold;cursor:pointer;">
+                        ✏️ ゲーム編集を開いて再アップロード
+                      </button>
+                    </div>
+                  </body>
+                `;
+              } else {
+                log("⚡ 単一HTMLゲームを検出。展開して実行します...");
+                iframe.srcdoc = injectGHubRuntimeIntoHtml(textData);
+                log("🚀 ゲーム起動完了！");
+                setTimeout(focusIframe, 150);
+              }
+            } else {
+              log(`⚠️ 取得されたデータがHTML/Zipではありません。\n内容: ${textData.slice(0, 150)}`);
+              iframe.srcdoc = `<body style="background:#0b0f19;color:#ff6b6b;font-family:sans-serif;padding:24px;text-align:center;">
+                <h3>⚠️ ゲームファイルの読み込みに失敗しました</h3>
+                <p style="color:#aaa;font-size:12px;">アップロードされたファイルが有効なHTMLまたはZipファイルか確認してください。</p>
+              </body>`;
+            }
+          }
+        } catch (err) {
+          if (!launchOfflineSavedHtml()) {
+            log(`❌ ゲーム読み込み失敗: ${err.message}`);
           }
         }
-      } catch (err) {
-        log(`❌ ゲーム読み込み失敗: ${err.message}`);
       }
 
       supabase.from('games').update({ play_count: (game.play_count || 0) + 1 }).eq('id', gameId).then();
@@ -2293,12 +2443,51 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
               }
 
               let pkg = args.path;
+              if (pkg === '@google/genai') return { path: 'ghub-genai-shim', namespace: 'ghub-shim' };
               if (pkg === 'react') return { path: 'https://esm.sh/react@18.2.0?dev', external: true };
               if (pkg === 'react-dom') return { path: 'https://esm.sh/react-dom@18.2.0?dev', external: true };
               if (pkg === 'react-dom/client') return { path: 'https://esm.sh/react-dom@18.2.0/client?dev', external: true };
               if (pkg.startsWith('react/')) return { path: `https://esm.sh/${pkg}@18.2.0?dev`, external: true };
               
               return { path: `https://esm.sh/${pkg}?deps=react@18.2.0,react-dom@18.2.0&dev`, external: true };
+            });
+
+            build.onLoad({ filter: /.*/, namespace: 'ghub-shim' }, () => {
+              return {
+                contents: `
+                  export const ThinkingLevel = { LOW: 'LOW', MEDIUM: 'MEDIUM', HIGH: 'HIGH' };
+                  export const Type = { STRING: 'STRING', NUMBER: 'NUMBER', INTEGER: 'INTEGER', BOOLEAN: 'BOOLEAN', ARRAY: 'ARRAY', OBJECT: 'OBJECT' };
+                  function _ex(c){if(!c)return'';if(typeof c==='string')return c;if(Array.isArray(c))return c.map(x=>typeof x==='string'?x:(x?.text||(x?.parts?x.parts.map(p=>p?.text||'').join('\\n'):JSON.stringify(x)))).join('\\n');if(typeof c==='object')return c.text||(c.parts?c.parts.map(p=>p?.text||'').join('\\n'):JSON.stringify(c));return String(c);}
+                  export class GoogleGenAI {
+                    constructor(){}
+                    get models(){
+                      const self=this;
+                      return {
+                        generateContent: async (params={})=>{
+                          const p=_ex(params.contents||params.prompt||'');
+                          const s=_ex(params?.config?.systemInstruction||'');
+                          let reply='';
+                          if(window.GHUB&&typeof window.GHUB.askAI==='function'){
+                            const res=await window.GHUB.askAI(p,s);
+                            reply=(res&&(res.reply||res.text))||'';
+                          }else{
+                            const r=await fetch('/ai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userPrompt:p,systemPrompt:s})});
+                            const d=await r.json();
+                            reply=d.reply||d.text||'';
+                          }
+                          return { text: reply, response: { text: () => reply } };
+                        },
+                        generateContentStream: async (params={})=>{
+                          const out=await self.models.generateContent(params);
+                          return (async function*(){ yield { text: out.text }; })();
+                        }
+                      };
+                    }
+                  }
+                  export default GoogleGenAI;
+                `,
+                loader: 'js'
+              };
             });
 
             build.onLoad({ filter: /.*/, namespace: 'zip-vfs' }, args => {
@@ -3646,7 +3835,16 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
           finalOfflineHtml += offlineBadge;
         }
 
-        // 7. ダウンロード実行
+        // 7. PWAアプリ内(IndexedDB)にも同時にキャッシュ
+        try {
+          if (window.GHUB_PWA?.saveOfflineGame) {
+            await window.GHUB_PWA.saveOfflineGame(currentGame, finalOfflineHtml);
+          }
+        } catch (pwaErr) {
+          console.warn('PWA IndexedDB cache skipped:', pwaErr);
+        }
+
+        // 8. ダウンロード実行
         const blob = new Blob([finalOfflineHtml], { type: 'text/html;charset=utf-8' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -3656,9 +3854,9 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 
-        log(`🎉 「${title}」のオフライン版HTMLをダウンロードしました！`);
+        log(`🎉 「${title}」のオフライン版HTMLをダウンロード ＆ PWAアプリ内に保存しました！`);
         closeDownloadModal();
-        alert(`🎉 「${title}」の完全オフライン版（.html）をダウンロードしました！\n\nインターネットがない環境や機内モードでも、ダウンロードしたファイルをブラウザでダブルクリックするだけでそのまま遊べます！`);
+        alert(`🎉 「${title}」をオフライン保存しました！\n\n・G-HUBのPWAアプリ内の「📥 保存済み」から圏外でも遊べます。\n・ダウンロードされたHTMLファイルを直接開いても動作します！`);
 
       } catch (err) {
         log(`❌ クライアント側オフライン生成失敗、サーバーからダウンロードします: ${err.message}`);
@@ -3666,6 +3864,80 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
         closeDownloadModal();
       } finally {
         if (btn) btn.innerHTML = origBtnHtml;
+      }
+    };
+
+    window.saveCurrentGameToPwa = async () => {
+      if (!currentGame) return alert('ゲームの読み込み完了までお待ちください');
+      const btn = document.getElementById('btn-dl-pwa-save');
+      const origHtml = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳</span> PWAに保存中...';
+      }
+
+      try {
+        let htmlToSave = '';
+        let reactCode = '';
+        let reactDomCode = '';
+        let tailwindCode = '';
+        try {
+          const [rRes, rdRes, twRes] = await Promise.all([
+            fetch('/offline-assets/react.production.min.js'),
+            fetch('/offline-assets/react-dom.production.min.js'),
+            fetch('/offline-assets/tailwind.min.js')
+          ]);
+          if (rRes.ok) reactCode = await rRes.text();
+          if (rdRes.ok) reactDomCode = await rdRes.text();
+          if (twRes.ok) tailwindCode = await twRes.text();
+        } catch (e) {}
+
+        let rawHtml = iframe.srcdoc || '';
+        if (!rawHtml && iframe.contentDocument) {
+          rawHtml = iframe.contentDocument.documentElement.outerHTML;
+        }
+
+        if (rawHtml && rawHtml.length >= 50 && (reactCode || reactDomCode)) {
+          let generatedStyles = '';
+          try {
+            if (iframe.contentDocument) {
+              iframe.contentDocument.querySelectorAll('style').forEach(s => {
+                if (s.textContent) generatedStyles += `\n` + s.textContent;
+              });
+            }
+          } catch (e) {}
+
+          const offlineImportMap = `
+          <script type="importmap">
+          {
+            "imports": {
+              "react": "data:text/javascript;charset=utf-8,export default window.React;export const {createElement,useState,useEffect,useRef,useMemo,useCallback,useContext,createContext,useReducer,Suspense,Fragment,Children,isValidElement,cloneElement}=window.React;",
+              "react/jsx-runtime": "data:text/javascript;charset=utf-8,export const jsx=window.React.createElement;export const jsxs=window.React.createElement;export const Fragment=window.React.Fragment;",
+              "react-dom": "data:text/javascript;charset=utf-8,export default window.ReactDOM;",
+              "react-dom/client": "data:text/javascript;charset=utf-8,export const createRoot=window.ReactDOM.createRoot;export const hydrateRoot=window.ReactDOM.hydrateRoot;export default window.ReactDOM;"
+            }
+          }
+          <\/script>`;
+          const inlineLibs = `<script>window.__GHUB_OFFLINE=true;${reactCode}${reactDomCode}<\/script>${offlineImportMap}${generatedStyles ? `<style>${generatedStyles}</style>` : ''}`;
+          if (tailwindCode && rawHtml.includes('cdn.tailwindcss.com')) {
+            rawHtml = rawHtml.replace(/<script[^>]*src=["'][^"']*cdn\.tailwindcss\.com[^"']*["'][^>]*><\/script>/gi, `<script>${tailwindCode}<\/script>`);
+          }
+          htmlToSave = rawHtml.includes('<head>')
+            ? rawHtml.replace('<head>', `<head>${inlineLibs}`)
+            : `<head>${inlineLibs}</head>${rawHtml}`;
+        }
+
+        await window.GHUB_PWA.saveOfflineGameById(currentGame, htmlToSave || undefined);
+        log(`📲 「${currentGame.title}」をPWAアプリ内に保存しました！（圏外でもプレイ可能）`);
+        closeDownloadModal();
+        alert(`✈️ 「${currentGame.title}」をPWAアプリ内に保存しました！\nインターネットが無い状態（機内モード）でもG-HUBホームの「📥 保存済み」から遊べます！`);
+      } catch (err) {
+        alert('PWA保存に失敗しました: ' + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+        }
       }
     };
 

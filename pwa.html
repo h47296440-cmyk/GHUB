@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="google-site-verification" content="-oHRcv-r1AKxmj2rod8d0Id_04t864zJl18x1JsIQTU" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>G-HUB PWAダウンロード & オフラインゲーム管理 | アプリ化して圏外でもプレイ</title>
+  <meta name="description" content="G-HUBをiPhone・Android・Windows・MacにPWAアプリとしてインストール＆トレンドゲームをまとめてオフライン保存！機内モードや圏外でもダウンロード済みブラウザゲームが遊べます。" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="G-HUB PWAダウンロード & オフラインゲーム管理" />
+  <meta property="og:description" content="ワンタップでアプリ化＆人気トレンドゲームをオフラインPWA保存。PC・スマホでいつでも起動できます。" />
+  <meta name="theme-color" content="#0b0f19" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.48.0/dist/umd/supabase.min.js"></script>
+  <script src="/ghub-pwa.js"></script>
+  <script>
+    if (localStorage.getItem('ghub_theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8fafc; color: #0f172a; transition: background-color 0.2s, color 0.2s; }
+    .dark body { background-color: #0b0f19; color: #f8fafc; }
+    .dark .bg-white { background-color: #131a29 !important; }
+    .dark .bg-slate-50 { background-color: #0b0f19 !important; }
+    .dark .bg-slate-100 { background-color: #1e293b !important; }
+    .dark .border-slate-200 { border-color: #1e293b !important; }
+    .dark .border-slate-100 { border-color: #1e293b !important; }
+    .dark .text-slate-900 { color: #f8fafc !important; }
+    .dark .text-slate-700 { color: #cbd5e1 !important; }
+    .dark .text-slate-600 { color: #94a3b8 !important; }
+    .dark .text-slate-500 { color: #64748b !important; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <a href="/" class="flex items-center gap-2 font-black text-xl tracking-tight text-slate-900">
+        <span class="bg-indigo-600 text-white px-2.5 py-1 rounded-xl text-sm shadow-sm">G</span>
+        <span>HUB</span>
+      </a>
+      <span class="text-[11px] font-extrabold px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800">
+        📲 PWAダウンロードセンター
+      </span>
+    </div>
+    <nav class="flex items-center gap-2 flex-wrap">
+      <a href="/" class="text-xs font-bold text-slate-600 hover:text-indigo-600 px-3 py-1.5 rounded-lg border border-slate-200 bg-white">🏠 ホーム</a>
+      <a href="/studio.html" class="text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50/60 dark:bg-indigo-950/40 dark:border-indigo-800 dark:text-indigo-300">⚡ Studio</a>
+      <a href="/upload.html" class="text-xs font-bold text-slate-600 hover:text-indigo-600 px-3 py-1.5 rounded-lg border border-slate-200 bg-white">🎮 投稿する</a>
+      <button type="button" onclick="toggleTheme()" id="theme-btn" class="text-xs font-bold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white">🌙</button>
+    </nav>
+  </header>
+
+  <main class="max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 flex-1 space-y-8">
+
+    <!-- Hero Install Panel -->
+    <section class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white border border-indigo-500/30 shadow-xl p-6 sm:p-8">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+        <div class="lg:col-span-7 space-y-4">
+          <div class="flex flex-wrap items-center gap-2">
+            <span id="pwa-status-badge" class="inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+              🔍 インストール状態を確認中...
+            </span>
+            <span id="offline-summary-pill" class="inline-flex items-center gap-1.5 text-[11px] font-extrabold px-3 py-1 rounded-full bg-white/10 text-slate-200 border border-white/10">
+              ✈️ 保存済み: 0作品
+            </span>
+          </div>
+
+          <h1 class="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
+            G-HUBをアプリ化して、<br class="hidden sm:inline" />
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-indigo-300 to-fuchsia-400">
+              オフラインでもすぐゲーム起動！
+            </span>
+          </h1>
+
+          <p class="text-sm text-slate-300 leading-relaxed max-w-2xl">
+            アプリストア不要・容量超軽量。ホーム画面やデスクトップにPWAとして追加すれば全画面アプリとして起動し、ダウンロード済みのインディーゲームやトレンドゲームを圏外・機内モードでもそのままプレイできます。
+          </p>
+
+          <div class="flex flex-wrap items-center gap-3 pt-1">
+            <button type="button" id="main-install-btn" onclick="triggerPwaInstall()" class="bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-black text-sm px-5 py-3.5 rounded-2xl shadow-lg shadow-emerald-500/25 transition active:scale-95 flex items-center gap-2">
+              <span>📲 G-HUB PWAアプリをインストール</span>
+            </button>
+            <button type="button" id="batch-trend-btn" onclick="downloadAllTrendingPack()" class="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs sm:text-sm px-4 py-3.5 rounded-2xl shadow-lg shadow-amber-500/20 transition active:scale-95">
+              🔥 トレンド4作品をまとめてPWA保存
+            </button>
+            <button type="button" onclick="copyInstallUrl()" class="bg-white/10 hover:bg-white/20 text-white font-bold text-xs px-4 py-3.5 rounded-2xl border border-white/15 transition">
+              🔗 インストールURLをコピー
+            </button>
+          </div>
+          <p id="install-feedback" class="text-xs font-bold text-cyan-300 min-h-[18px]"></p>
+        </div>
+
+        <!-- Preview / Device Card -->
+        <div class="lg:col-span-5">
+          <div class="bg-slate-950/70 border border-white/10 rounded-2xl p-5 space-y-3">
+            <div class="flex items-center gap-3">
+              <img src="/pwa-192x192.png" alt="G-HUB App Icon" class="w-14 h-14 rounded-2xl shadow-md border border-white/15 bg-slate-900" />
+              <div>
+                <div class="text-base font-black text-white">G-HUB - Indie Games</div>
+                <div class="text-xs text-slate-400">Progressive Web App (v3 Service Worker)</div>
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-2 pt-2 text-center">
+              <div class="bg-white/5 rounded-xl p-2.5 border border-white/5">
+                <div class="text-base font-black text-emerald-400">0MB</div>
+                <div class="text-[10px] text-slate-400 font-bold">ストア不要</div>
+              </div>
+              <div class="bg-white/5 rounded-xl p-2.5 border border-white/5">
+                <div class="text-base font-black text-cyan-400">圏外OK</div>
+                <div class="text-[10px] text-slate-400 font-bold">IndexedDB保存</div>
+              </div>
+              <div class="bg-white/5 rounded-xl p-2.5 border border-white/5">
+                <div class="text-base font-black text-amber-400">PC/スマホ</div>
+                <div class="text-[10px] text-slate-400 font-bold">フルスクリーン</div>
+              </div>
+            </div>
+            <div id="sw-ready-line" class="text-[11px] font-bold text-slate-300 bg-white/5 px-3 py-2 rounded-xl border border-white/5">
+              ⚙️ オフラインエンジン初期化中...
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OS Specific Install Guide -->
+    <section class="space-y-3">
+      <h2 class="text-base font-black text-slate-900 flex items-center gap-2">
+        <span>📱 端末別インストール手順（30秒で完了）</span>
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 space-y-2 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-black text-slate-900">🤖 Android (Chrome)</span>
+            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">自動ポップアップ対応</span>
+          </div>
+          <ol class="text-xs text-slate-600 space-y-1.5 list-decimal list-inside leading-relaxed">
+            <li>上の <strong>「G-HUB PWAアプリをインストール」</strong> をタップ。</li>
+            <li>反応しない場合は右上メニュー <strong>⋮ →「アプリをインストール」</strong> を選択。</li>
+            <li>ホーム画面のG-HUBアイコンから全画面で起動できます！</li>
+          </ol>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 space-y-2 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-black text-slate-900">🍎 iPhone / iPad (Safari)</span>
+            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">iOS 16.4+対応</span>
+          </div>
+          <ol class="text-xs text-slate-600 space-y-1.5 list-decimal list-inside leading-relaxed">
+            <li>Safariで本ページを開き、画面下の <strong>共有ボタン (□↑)</strong> をタップ。</li>
+            <li>下にスクロールして <strong>「ホーム画面に追加」</strong> をタップ。</li>
+            <li>追加されたアプリアイコンから起動すると圏外でも動作します。</li>
+          </ol>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 space-y-2 shadow-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-black text-slate-900">💻 Windows / Mac (Chrome・Edge)</span>
+            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">デスクトップアプリ</span>
+          </div>
+          <ol class="text-xs text-slate-600 space-y-1.5 list-decimal list-inside leading-relaxed">
+            <li>アドレスバー右端の <strong>インストールアイコン (📥/🖥️)</strong> または上のボタンをクリック。</li>
+            <li>独立ウィンドウのデスクトップアプリとしてタスクバー/Dockに常駐！</li>
+            <li>オフライン時は <strong>HTML単体ファイル (.html)</strong> 書き出しも併用可能です。</li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <!-- Offline Library (Saved Games in IndexedDB) -->
+    <section class="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-lg font-black text-slate-900 flex items-center gap-2">
+            <span>✈️ PWA保存済みオフラインライブラリ</span>
+            <span id="saved-count-badge" class="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">0作品</span>
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">ここに保存されたゲームはインターネット接続なし・機内モードでも「▶ オフライン起動」できます。</p>
+        </div>
+        <div class="text-xs font-mono font-bold text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200" id="saved-size-label">
+          合計容量: 0 KB
+        </div>
+      </div>
+      <div id="saved-games-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="col-span-full text-center py-8 text-xs text-slate-400">読み込み中...</div>
+      </div>
+    </section>
+
+    <!-- Catalog Downloader (Trending + All Games) -->
+    <section class="space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-lg font-black text-slate-900">📥 ゲームを選んでPWA・HTMLダウンロード</h2>
+          <p class="text-xs text-slate-500">「✈️ PWAに保存」でアプリ内保存、「📦 HTML書き出し」で端末へ単体HTML保存ができます。</p>
+        </div>
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <input id="catalog-search" type="text" oninput="renderCatalog()" placeholder="タイトルやタグで絞り込み..." class="w-full sm:w-64 text-xs px-3.5 py-2 rounded-xl border border-slate-200 bg-white outline-none focus:border-indigo-500" />
+        </div>
+      </div>
+      <div id="catalog-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="col-span-full text-center py-10 text-xs text-slate-400">ゲームカタログを読み込み中...</div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="border-t border-slate-200 bg-white py-5 px-6 text-center text-xs text-slate-500">
+    G-HUB — Indie Gaming Platform &amp; PWA Offline Arcade · <a href="/" class="text-indigo-600 font-bold hover:underline">ホームへ戻る</a> · <a href="/studio.html" class="text-indigo-600 font-bold hover:underline">GHUB Studio</a>
+  </footer>
+
+  <script>
+    const SUPABASE_URL = `${window.location.origin}/supabase`;
+    const SUPABASE_ANON_KEY = 'sb_publishable_cSX9rcWTjbX6lWfyT1KLNQ_tUFYuXtj';
+    const sb = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+    let deferredPrompt = null;
+    let catalogGames = [];
+    let savedMap = new Map();
+
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      localStorage.setItem('ghub_theme', isDark ? 'dark' : 'light');
+      document.getElementById('theme-btn').textContent = isDark ? '☀️' : '🌙';
+    }
+    if (document.documentElement.classList.contains('dark')) {
+      document.getElementById('theme-btn').textContent = '☀️';
+    }
+
+    function escapeHtml(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function setFeedback(msg, isErr = false) {
+      const el = document.getElementById('install-feedback');
+      el.textContent = msg;
+      el.className = `text-xs font-bold min-h-[18px] ${isErr ? 'text-rose-300' : 'text-cyan-300'}`;
+    }
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      updatePwaStatusBadge();
+    });
+
+    window.addEventListener('appinstalled', () => {
+      deferredPrompt = null;
+      updatePwaStatusBadge(true);
+      setFeedback('🎉 G-HUB PWAアプリが端末にインストールされました！');
+    });
+
+    function updatePwaStatusBadge(justInstalled = false) {
+      const badge = document.getElementById('pwa-status-badge');
+      const btn = document.getElementById('main-install-btn');
+      if (justInstalled || (window.GHUB_PWA && window.GHUB_PWA.isStandalonePwa())) {
+        badge.textContent = '✅ PWAアプリとして起動中（オフライン対応）';
+        badge.className = 'inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/40';
+        btn.innerHTML = '<span>✅ インストール済み（アプリ起動中）</span>';
+      } else if (deferredPrompt) {
+        badge.textContent = '⚡ ワンクリックインストール準備完了';
+        badge.className = 'inline-flex items-center gap-1.5 text-[11px] font-black px-3 py-1 rounded-full bg-cyan-500/25 text-cyan-200 border border-cyan-400/40';
+        btn.innerHTML = '<span>📲 今すぐG-HUBをインストール</span>';
+      } else if (window.GHUB_PWA && window.GHUB_PWA.isIosSafari()) {
+        badge.textContent = '🍎 iPhone/iPad Safari ホーム画面追加に対応';
+      } else {
+        badge.textContent = '🌐 ブラウザ表示中（下の端末別手順またはボタンでPWA化可能）';
+      }
+    }
+
+    async function triggerPwaInstall() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        if (choice && choice.outcome === 'accepted') {
+          setFeedback('🎉 インストールを開始しました！ホーム画面をご確認ください。');
+        } else {
+          setFeedback('キャンセルされました。いつでも再実行できます。');
+        }
+        deferredPrompt = null;
+        updatePwaStatusBadge();
+        return;
+      }
+
+      if (window.GHUB_PWA && window.GHUB_PWA.isIosSafari()) {
+        window.GHUB_PWA.showIOSInstallModal();
+        return;
+      }
+
+      if (window.GHUB_PWA && window.GHUB_PWA.isStandalonePwa()) {
+        setFeedback('✅ すでにPWAアプリとして実行中です！下のゲームを「✈️ PWAに保存」すると圏外で遊べます。');
+        return;
+      }
+
+      setFeedback('💡 Chrome / Edge のアドレスバー右側の「インストール (📥)」アイコン、またはブラウザメニューの「アプリをインストール」をお選びください。');
+    }
+
+    async function copyInstallUrl() {
+      const url = `${window.location.origin}/pwa.html`;
+      try {
+        await navigator.clipboard.writeText(url);
+        setFeedback(`📋 URLをコピーしました: ${url}`);
+      } catch (e) {
+        setFeedback(`URL: ${url}`);
+      }
+    }
+
+    async function checkServiceWorker() {
+      const el = document.getElementById('sw-ready-line');
+      if (!('serviceWorker' in navigator)) {
+        el.textContent = '⚠️ このブラウザはService Worker非対応です（単体HTML書き出しをご利用ください）';
+        return;
+      }
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        el.textContent = reg ? '✅ Service Worker 稼働中 — アプリ本体はオフライン起動可能です' : '⚙️ Service Worker 準備中';
+      } catch (e) {
+        el.textContent = '⚙️ Service Worker 登録待機中';
+      }
+    }
+
+    async function refreshSavedGames() {
+      const items = window.GHUB_PWA ? await window.GHUB_PWA.listOfflineGames() : [];
+      savedMap = new Map(items.map(i => [String(i.id), i]));
+
+      const totalBytes = items.reduce((sum, i) => sum + (Number(i.sizeBytes) || 0), 0);
+      const totalKb = Math.max(0, Math.round(totalBytes / 1024));
+      document.getElementById('saved-count-badge').textContent = `${items.length}作品`;
+      document.getElementById('offline-summary-pill').textContent = `✈️ 保存済み: ${items.length}作品`;
+      document.getElementById('saved-size-label').textContent = `合計容量: ${totalKb.toLocaleString()} KB`;
+
+      const grid = document.getElementById('saved-games-grid');
+      if (items.length === 0) {
+        grid.innerHTML = `<div class="col-span-full text-center py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-xs text-slate-500">まだPWA保存されたゲームはありません。上の <strong>「🔥 トレンド4作品をまとめてPWA保存」</strong> か下のカタログから保存できます！</div>`;
+      } else {
+        grid.innerHTML = items.map(g => {
+          const thumb = g.thumbnail_url || '/src/assets/images/ghub_default_thumb_1794550924982.jpg';
+          const kb = Math.max(1, Math.round((Number(g.sizeBytes) || 0) / 1024));
+          return `
+            <div class="border border-slate-200 rounded-2xl p-3.5 bg-slate-50/70 flex flex-col justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <img src="${escapeHtml(thumb)}" alt="${escapeHtml(g.title)}" class="w-14 h-14 rounded-xl object-cover bg-slate-200 shrink-0" />
+                <div class="min-w-0">
+                  <div class="font-black text-sm text-slate-900 truncate">${escapeHtml(g.title)}</div>
+                  <div class="text-[11px] text-slate-500 font-bold mt-0.5">${escapeHtml(g.tag || 'Indie')} · ${kb} KB</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <a href="/play.html?id=${encodeURIComponent(g.id)}" class="flex-1 text-center bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black py-2 rounded-xl transition">▶ オフライン起動</a>
+                <a href="/api/download-offline-game?id=${encodeURIComponent(g.id)}" class="px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700" title="単体HTMLとして端末保存">📦 HTML</a>
+                <button type="button" onclick="removeSaved('${escapeHtml(g.id)}')" class="px-2.5 py-2 text-xs font-bold rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 bg-white" title="削除">🗑️</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+      renderCatalog();
+    }
+
+    async function removeSaved(id) {
+      if (!window.GHUB_PWA) return;
+      await window.GHUB_PWA.removeOfflineGame(id);
+      await refreshSavedGames();
+    }
+
+    async function saveGameToPwa(id, btnEl) {
+      const game = catalogGames.find(g => String(g.id) === String(id));
+      if (!game || !window.GHUB_PWA) return;
+      if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.textContent = '⏳ 保存中...';
+      }
+      try {
+        await window.GHUB_PWA.saveOfflineGameById(game);
+        setFeedback(`✅ 「${game.title}」をPWAオフライン保存しました！`);
+        await refreshSavedGames();
+      } catch (e) {
+        setFeedback(`❌ 保存に失敗しました: ${e.message || e}`, true);
+        if (btnEl) {
+          btnEl.disabled = false;
+          btnEl.textContent = '✈️ PWAに保存';
+        }
+      }
+    }
+
+    async function downloadAllTrendingPack() {
+      const btn = document.getElementById('batch-trend-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ トレンド作品を取得中...';
+      try {
+        let targets = catalogGames.filter(g => g.is_trending || String(g.id).startsWith('trend-'));
+        if (targets.length === 0) {
+          const r = await fetch('/api/trending-games');
+          if (r.ok) targets = await r.json();
+        }
+        let saved = 0;
+        for (const g of targets.slice(0, 6)) {
+          btn.textContent = `⏳ 保存中 (${saved + 1}/${targets.length})...`;
+          await window.GHUB_PWA.saveOfflineGameById(g);
+          saved++;
+        }
+        setFeedback(`🎉 トレンド ${saved} 作品をPWAへ一括保存しました！圏外でも遊べます。`);
+        await refreshSavedGames();
+      } catch (e) {
+        setFeedback('❌ まとめ保存に失敗しました。オンライン状態で再試行してください。', true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔥 トレンド4作品をまとめてPWA保存';
+      }
+    }
+
+    async function loadCatalog() {
+      const merged = new Map();
+      try {
+        const res = await fetch('/api/games');
+        if (res.ok) {
+          const localList = await res.json();
+          if (Array.isArray(localList)) localList.forEach(g => g?.id && merged.set(g.id, g));
+        }
+      } catch (e) {}
+
+      if (sb) {
+        try {
+          const { data } = await sb.from('games').select('*').order('play_count', { ascending: false }).limit(60);
+          if (Array.isArray(data)) {
+            data.forEach(g => {
+              if (g?.id && !merged.has(g.id)) merged.set(g.id, g);
+            });
+          }
+        } catch (e) {}
+      }
+
+      if (merged.size === 0 && window.GHUB_PWA) {
+        window.GHUB_PWA.getCachedCatalogSnapshot().forEach(g => g?.id && merged.set(g.id, g));
+      }
+
+      catalogGames = Array.from(merged.values()).sort((a, b) => {
+        const aT = a.is_trending ? 1 : 0;
+        const bT = b.is_trending ? 1 : 0;
+        if (aT !== bT) return bT - aT;
+        return (Number(b.play_count) || 0) - (Number(a.play_count) || 0);
+      });
+
+      if (window.GHUB_PWA && catalogGames.length > 0) {
+        window.GHUB_PWA.cacheCatalogSnapshot(catalogGames);
+      }
+      renderCatalog();
+    }
+
+    function renderCatalog() {
+      const grid = document.getElementById('catalog-grid');
+      if (!grid) return;
+      const q = (document.getElementById('catalog-search')?.value || '').trim().toLowerCase();
+      const filtered = catalogGames.filter(g =>
+        !q || String(g.title || '').toLowerCase().includes(q) || String(g.tag || '').toLowerCase().includes(q) || String(g.description || '').toLowerCase().includes(q)
+      );
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `<div class="col-span-full text-center py-10 text-xs text-slate-400">一致するゲームが見つかりません</div>`;
+        return;
+      }
+
+      grid.innerHTML = filtered.map(g => {
+        const isSaved = savedMap.has(String(g.id));
+        const thumb = g.thumbnail_url || '/src/assets/images/ghub_default_thumb_1794550924982.jpg';
+        const trendBadge = g.is_trending
+          ? `<span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">${escapeHtml(g.trend_badge || '🔥 トレンド')}</span>`
+          : '';
+        return `
+          <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm flex flex-col justify-between">
+            <div>
+              <div class="relative aspect-video bg-slate-900">
+                <img src="${escapeHtml(thumb)}" alt="${escapeHtml(g.title)}" class="w-full h-full object-cover" />
+                <div class="absolute top-2 left-2 flex gap-1.5 flex-wrap">
+                  ${trendBadge}
+                  ${isSaved ? '<span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500 text-white">✅ 保存済</span>' : ''}
+                </div>
+              </div>
+              <div class="p-4 space-y-1.5">
+                <div class="flex items-center justify-between gap-2">
+                  <h3 class="font-black text-sm text-slate-900 truncate">${escapeHtml(g.title)}</h3>
+                  <span class="text-[10px] font-extrabold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded shrink-0">${escapeHtml(g.tag || 'Indie')}</span>
+                </div>
+                <p class="text-xs text-slate-500 line-clamp-2">${escapeHtml(g.description || '')}</p>
+              </div>
+            </div>
+            <div class="px-4 pb-4 flex items-center gap-2">
+              <button type="button" onclick="saveGameToPwa('${escapeHtml(g.id)}', this)" class="flex-1 ${isSaved ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-indigo-600 hover:bg-indigo-700'} text-white text-xs font-black py-2.5 rounded-xl transition">
+                ${isSaved ? '🔄 最新版に更新保存' : '✈️ PWAに保存'}
+              </button>
+              <a href="/api/download-offline-game?id=${encodeURIComponent(g.id)}" class="px-3 py-2.5 text-xs font-bold rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700" title="HTML単体ダウンロード">📦 HTML</a>
+              <a href="/play.html?id=${encodeURIComponent(g.id)}" class="px-3 py-2.5 text-xs font-bold rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700">▶</a>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      updatePwaStatusBadge();
+      checkServiceWorker();
+      await refreshSavedGames();
+      await loadCatalog();
+    });
+  </script>
+</body>
+</html>
