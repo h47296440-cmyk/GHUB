@@ -153,7 +153,12 @@
                 ⭐ <span id="avg-rating-val">-</span> (<span id="rating-count-val">0</span>件)
               </span>
             </div>
-            <p id="game-author" class="text-[11px] text-slate-400 font-mono mt-0.5"></p>
+            <div class="flex flex-wrap items-center gap-2 mt-0.5">
+              <p id="game-author" class="text-[11px] text-slate-400 font-mono"></p>
+              <button type="button" id="follow-author-btn" onclick="toggleFollowAuthor()" class="hidden text-[10px] font-bold px-2 py-0.5 rounded-md border border-indigo-500/40 bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25 transition">
+                ＋ 作者をフォロー
+              </button>
+            </div>
           </div>
         </div>
 
@@ -428,6 +433,16 @@
           ✏️ ゲーム編集 & アップデート公開
         </h2>
         <button onclick="closeEditModal()" class="text-slate-400 hover:text-slate-200 text-sm">✕</button>
+      </div>
+
+      <div class="bg-emerald-950/30 border border-emerald-500/40 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p class="font-bold text-emerald-300">🛠️ コードを直接編集・AI改造してアップデート</p>
+          <p class="text-[10px] text-slate-300">GHUB Studioでライブテストしながら上書き公開できます</p>
+        </div>
+        <button type="button" onclick="openInStudioEdit()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-3 py-1.5 rounded-lg text-xs transition shrink-0">
+          Studioでコード編集 →
+        </button>
       </div>
 
       <div class="space-y-3">
@@ -2085,6 +2100,82 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
       }
     }
 
+    function normalizeEmail(email) {
+      return String(email || '').trim().toLowerCase();
+    }
+
+    function markDailyActivity(kind) {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const key = `ghub_daily_activity_${today}`;
+        const cur = JSON.parse(localStorage.getItem(key) || '{}');
+        cur[kind] = true;
+        localStorage.setItem(key, JSON.stringify(cur));
+      } catch (e) {}
+    }
+
+    function getFollowedAuthors() {
+      try {
+        return JSON.parse(localStorage.getItem('ghub_followed_authors') || '[]');
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function updateFollowAuthorButton() {
+      const btn = document.getElementById('follow-author-btn');
+      if (!btn || !currentGame?.author_email) return;
+      if (currentUser && normalizeEmail(currentUser.email) === normalizeEmail(currentGame.author_email)) {
+        btn.classList.add('hidden');
+        return;
+      }
+      btn.classList.remove('hidden');
+      const followed = getFollowedAuthors().map(normalizeEmail);
+      const isFollowing = followed.includes(normalizeEmail(currentGame.author_email));
+      if (isFollowing) {
+        btn.innerText = '✓ フォロー中';
+        btn.className = 'text-[10px] font-bold px-2 py-0.5 rounded-md border border-emerald-500/40 bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 transition';
+      } else {
+        btn.innerText = '＋ 作者をフォロー';
+        btn.className = 'text-[10px] font-bold px-2 py-0.5 rounded-md border border-indigo-500/40 bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25 transition';
+      }
+    }
+
+    window.toggleFollowAuthor = () => {
+      if (!currentGame?.author_email) return;
+      const target = normalizeEmail(currentGame.author_email);
+      const list = getFollowedAuthors().map(normalizeEmail);
+      const idx = list.indexOf(target);
+      if (idx >= 0) {
+        list.splice(idx, 1);
+      } else {
+        list.push(target);
+        markDailyActivity('social');
+      }
+      localStorage.setItem('ghub_followed_authors', JSON.stringify(Array.from(new Set(list))));
+      updateFollowAuthorButton();
+    };
+
+    function mergeNewerGame(baseGame, candidateGame) {
+      if (!baseGame) return candidateGame;
+      if (!candidateGame) return baseGame;
+      const baseTime = baseGame.updated_at ? new Date(baseGame.updated_at).getTime() : 0;
+      const candTime = candidateGame.updated_at ? new Date(candidateGame.updated_at).getTime() : 0;
+      if (candTime > baseTime) {
+        return { ...baseGame, ...candidateGame };
+      }
+      if (baseTime > candTime) {
+        return { ...candidateGame, ...baseGame };
+      }
+      // タイムスタンプが同じ場合は server/local の最新フィールドを優先しつつ、欠損補完
+      return {
+        ...baseGame,
+        ...candidateGame,
+        play_count: Math.max(Number(baseGame.play_count) || 0, Number(candidateGame.play_count) || 0),
+        likes_count: Math.max(Number(baseGame.likes_count) || 0, Number(candidateGame.likes_count) || 0)
+      };
+    }
+
     async function loadAndRunGame() {
       if (!gameId) return;
       let game = null;
@@ -2099,25 +2190,27 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
           if (!error && data) game = data;
         } catch (e) {}
 
-        // Supabaseに無い場合、サーバーAPI (/api/games) から取得
-        if (!game) {
-          try {
-            const res = await fetch(`/api/games?id=${encodeURIComponent(gameId)}`);
-            if (res.ok) {
-              const serverGame = await res.json();
-              if (serverGame && serverGame.id) game = serverGame;
-            }
-          } catch (e) {}
-        }
-      }
-
-      // それでも無い場合、ローカルストレージまたはPWA保存済みIndexedDBから取得
-      if (!game) {
+        // 常にサーバーAPI (/api/games) からも取得し、updated_at が新しい更新を優先採用
         try {
-          const localGames = JSON.parse(localStorage.getItem('ghub_local_games') || '[]');
-          game = localGames.find(g => g.id === gameId);
+          const res = await fetch(`/api/games?id=${encodeURIComponent(gameId)}&t=${Date.now()}`);
+          if (res.ok) {
+            const serverGame = await res.json();
+            if (serverGame && serverGame.id) {
+              game = mergeNewerGame(game, serverGame);
+            }
+          }
         } catch (e) {}
       }
+
+      // ローカルストレージ側の更新キャッシュともマージ
+      try {
+        const localGames = JSON.parse(localStorage.getItem('ghub_local_games') || '[]');
+        const lg = localGames.find(g => g.id === gameId);
+        if (lg) {
+          game = mergeNewerGame(game, lg);
+        }
+      } catch (e) {}
+
       if (!game && offlineSavedRecord) {
         game = offlineSavedRecord;
       }
@@ -2153,6 +2246,7 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
       } catch (e) {}
 
       recordRecentPlay(gameId);
+      markDailyActivity('play');
 
       document.getElementById('game-title').innerText = game.title;
       document.getElementById('game-author').innerText = `by ${game.author_email || 'guest'}`;
@@ -2178,7 +2272,7 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
       const { data: { user } } = await supabase.auth.getUser();
       currentUser = user;
       if (user) {
-        if (user.email === game.author_email) {
+        if (normalizeEmail(user.email) === normalizeEmail(game.author_email)) {
           document.getElementById('author-controls').classList.remove('hidden');
         }
         const { data: prof } = await supabase.from('profiles').select('*').eq('email', user.email).single();
@@ -2193,6 +2287,7 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
           userCoins = Math.max(0, parseInt(guestCoins) || 0);
         }
       }
+      updateFollowAuthorButton();
       updateCoinDisplay();
       updateSeamlessModeUI();
       loadUserPurchasedItems();
@@ -2213,7 +2308,7 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
       }
       let isPurchased = false;
       if (user) {
-        if (user.email === game.author_email) isPurchased = true;
+        if (normalizeEmail(user.email) === normalizeEmail(game.author_email)) isPurchased = true;
         else if (game.price_coins > 0) {
           const { data: purchase } = await supabase.from('purchases').select('*').eq('user_email', user.email).eq('game_id', gameId).single();
           if (purchase) isPurchased = true;
@@ -2290,10 +2385,15 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
         // オフラインでもPWAキャッシュ済みゲームを即起動
       } else {
         try {
-          if (!targetUrl) throw new Error('エントリーURLがありません');
-          const response = await fetch(targetUrl);
-          if (!response.ok) {
-            throw new Error(`ゲームファイルの取得に失敗しました (Status: ${response.status} ${response.statusText})`);
+          const fallbackPayloadUrl = `/api/games/payload/${encodeURIComponent(gameId)}?v=${Date.now()}`;
+          let response = targetUrl ? await fetch(targetUrl, { cache: 'no-store' }).catch(() => null) : null;
+          if (!response || !response.ok) {
+            const fbRes = await fetch(fallbackPayloadUrl, { cache: 'no-store' }).catch(() => null);
+            if (fbRes && fbRes.ok) {
+              response = fbRes;
+            } else {
+              throw new Error(`ゲームファイルの取得に失敗しました (Status: ${response ? response.status : 'network'})`);
+            }
           }
 
           const arrayBuffer = await response.arrayBuffer();
@@ -2351,9 +2451,10 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
       loadReviews();
       loadGameUpdates(); // 📢 アップデート履歴読み込み
 
-      if (sessionStorage.getItem('open_edit') === 'true') {
+      const wantsEditParam = new URLSearchParams(window.location.search).get('edit') === '1';
+      if (sessionStorage.getItem('open_edit') === 'true' || wantsEditParam) {
         sessionStorage.removeItem('open_edit');
-        if (currentUser && currentUser.email === game.author_email) {
+        if (currentUser && normalizeEmail(currentUser.email) === normalizeEmail(game.author_email)) {
           setTimeout(() => openEditModal(), 300);
         }
       }
@@ -2707,6 +2808,7 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
 
     // いいね
     window.addLike = async () => {
+      markDailyActivity('social');
       const { data: g } = await supabase.from('games').select('likes_count').eq('id', gameId).single();
       const next = (g?.likes_count || 0) + 1;
       await supabase.from('games').update({ likes_count: next }).eq('id', gameId);
@@ -2751,6 +2853,7 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
 
     document.getElementById('chat-form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      markDailyActivity('social');
       const user = document.getElementById('chat-user').value;
       const content = document.getElementById('chat-content').value;
       await supabase.from('messages').insert({ game_id: gameId, user_name: user, content });
@@ -2858,6 +2961,7 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
 
     document.getElementById('review-form').addEventListener('submit', async (e) => {
       e.preventDefault();
+      markDailyActivity('social');
       const userNameInput = document.getElementById('review-user-name').value.trim();
       const commentInput = document.getElementById('review-comment').value.trim();
       const btn = document.getElementById('submit-review-btn');
@@ -3171,6 +3275,59 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
       }
     });
 
+    window.openInStudioEdit = () => {
+      if (!gameId) return;
+      window.location.href = `studio.html?edit=${encodeURIComponent(gameId)}`;
+    };
+
+    async function blobToCompactDataUrl(blob) {
+      return new Promise((resolve) => {
+        try {
+          const url = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = 640;
+              canvas.height = 360;
+              const ctx = canvas.getContext('2d');
+              const scale = Math.max(640 / img.width, 360 / img.height);
+              const dw = img.width * scale;
+              const dh = img.height * scale;
+              ctx.drawImage(img, (640 - dw) / 2, (360 - dh) / 2, dw, dh);
+              URL.revokeObjectURL(url);
+              resolve(canvas.toDataURL('image/jpeg', 0.78));
+            } catch (e) {
+              URL.revokeObjectURL(url);
+              resolve(null);
+            }
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve(null);
+          };
+          img.src = url;
+        } catch (e) {
+          resolve(null);
+        }
+      });
+    }
+
+    async function payloadBlobToServerBody(blob, payloadType) {
+      if (payloadType === 'html') {
+        const textData = await blob.text();
+        return { filename: 'index.html', contentType: 'text/html', textData };
+      }
+      const ab = await blob.arrayBuffer();
+      const bytes = new Uint8Array(ab);
+      let binary = '';
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      return { filename: 'game.zip', contentType: 'application/zip', base64Data: btoa(binary) };
+    }
+
     // アップデート保存実行
     window.saveGameUpdates = async () => {
       const title = document.getElementById('edit-game-title').value.trim();
@@ -3178,7 +3335,7 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
       const price = parseInt(document.getElementById('edit-game-price').value) || 0;
       const desc = document.getElementById('edit-game-desc').value.trim();
       const versionTitle = document.getElementById('edit-version-title').value.trim() || '最新アップデート';
-      const changelog = document.getElementById('edit-changelog').value.trim();
+      const changelogInput = document.getElementById('edit-changelog').value.trim();
       const saveBtn = document.getElementById('save-update-btn');
 
       const trialSelectVal = document.getElementById('edit-trial-select').value;
@@ -3195,6 +3352,7 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
       saveBtn.innerText = '保存＆アップロード中...';
 
       try {
+        const nowIso = new Date().toISOString();
         const supaUpdateData = {
           title,
           tag,
@@ -3202,31 +3360,72 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
           description: desc
         };
 
-        // サムネイル画像の更新があればアップロード
+        // サムネイル画像の更新（Supabase Storage失敗時はData URLへフォールバックし、中断させない）
         if (newThumbnailBlob) {
-          const thumbPath = `${gameId}/thumbnail.jpg`;
-          await supabase.storage.from('games').upload(thumbPath, newThumbnailBlob, {
-            contentType: 'image/jpeg',
-            upsert: true
-          });
-          const newThumbUrl = supabase.storage.from('games').getPublicUrl(thumbPath).data.publicUrl;
-          supaUpdateData.thumbnail_url = `${newThumbUrl}?t=${Date.now()}`;
+          let thumbUploaded = false;
+          try {
+            const thumbPath = `${gameId}/thumbnail.jpg`;
+            const { error: thumbErr } = await supabase.storage.from('games').upload(thumbPath, newThumbnailBlob, {
+              contentType: 'image/jpeg',
+              upsert: true
+            });
+            if (!thumbErr) {
+              const newThumbUrl = supabase.storage.from('games').getPublicUrl(thumbPath)?.data?.publicUrl;
+              if (newThumbUrl) {
+                supaUpdateData.thumbnail_url = `${newThumbUrl}?t=${Date.now()}`;
+                thumbUploaded = true;
+              }
+            }
+          } catch (e) {}
+
+          if (!thumbUploaded) {
+            const fallbackThumb = await blobToCompactDataUrl(newThumbnailBlob);
+            if (fallbackThumb) supaUpdateData.thumbnail_url = fallbackThumb;
+          }
         }
 
-        // ゲームファイルの更新があればアップロード
+        // ゲームファイルの更新（必ず /api/games/payload に先行保存し、Supabase Storage障害時でも必ず起動できるようにする）
+        let updatedHtmlText = '';
         if (newGameFilePayload) {
           const filename = newPayloadType === 'html' ? 'index.html' : 'game.zip';
-          await supabase.storage.from('games').upload(`${gameId}/${filename}`, newGameFilePayload, {
-            contentType: newPayloadType === 'html' ? 'text/html' : 'application/zip',
-            upsert: true
-          });
-          const newEntryUrl = supabase.storage.from('games').getPublicUrl(`${gameId}/${filename}`).data.publicUrl;
-          supaUpdateData.entry_url = `${newEntryUrl}?t=${Date.now()}`;
+          const srvPayloadBody = await payloadBlobToServerBody(newGameFilePayload, newPayloadType);
+          if (srvPayloadBody.textData) updatedHtmlText = srvPayloadBody.textData;
+
+          let serverEntryUrl = `/api/games/payload/${encodeURIComponent(gameId)}?v=${Date.now()}`;
+          try {
+            const pRes = await fetch('/api/games/payload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ game_id: gameId, ...srvPayloadBody })
+            });
+            if (pRes.ok) {
+              const pJson = await pRes.json();
+              if (pJson?.entry_url) serverEntryUrl = `${pJson.entry_url}?v=${Date.now()}`;
+            }
+          } catch (e) {}
+
+          supaUpdateData.entry_url = serverEntryUrl;
+
+          try {
+            const { error: fileErr } = await supabase.storage.from('games').upload(`${gameId}/${filename}`, newGameFilePayload, {
+              contentType: newPayloadType === 'html' ? 'text/html' : 'application/zip',
+              upsert: true
+            });
+            if (!fileErr) {
+              const newEntryUrl = supabase.storage.from('games').getPublicUrl(`${gameId}/${filename}`)?.data?.publicUrl;
+              if (newEntryUrl) {
+                supaUpdateData.entry_url = `${newEntryUrl}?t=${Date.now()}`;
+              }
+            }
+          } catch (e) {}
         }
 
-        // games テーブルの更新
+        // games テーブルの更新（RLS等で失敗しても続行し、存在しない場合はinsert試行）
         try {
-          await supabase.from('games').update(supaUpdateData).eq('id', gameId);
+          const { error: updErr } = await supabase.from('games').update(supaUpdateData).eq('id', gameId);
+          if (updErr) {
+            console.warn('Supabase update warning (server/local backup persists):', updErr.message);
+          }
         } catch (e) {}
 
         // 体験版時間の保存
@@ -3239,19 +3438,23 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
         } catch (e) {}
         localStorage.setItem(`ghub_trial_${gameId}`, String(trialMinutes));
 
-        // サーバー側 /api/games と localStorage の更新
+        // サーバー側 /api/games と localStorage の更新（updated_at を記録して最優先にする）
         const fullUpdatedGame = {
           ...(currentGame || {}),
+          id: gameId,
           ...supaUpdateData,
-          trial_duration_minutes: trialMinutes
+          trial_duration_minutes: trialMinutes,
+          updated_at: nowIso
         };
-        try {
-          await fetch('/api/games', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(fullUpdatedGame)
-          });
-        } catch (e) {}
+
+        const srvRes = await fetch('/api/games', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(fullUpdatedGame)
+        });
+        if (!srvRes.ok) {
+          throw new Error('サーバーへのゲーム情報保存に失敗しました');
+        }
 
         try {
           const localGames = JSON.parse(localStorage.getItem('ghub_local_games') || '[]');
@@ -3261,17 +3464,29 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
           localStorage.setItem('ghub_local_games', JSON.stringify(localGames));
         } catch (e) {}
 
-        // アップデート内容の記録（changelogが入力されている場合）
+        // PWAオフライン保存済みキャッシュがあれば最新版へ更新（古い版の誤起動を防止）
+        try {
+          const offExisting = await window.GHUB_PWA?.getOfflineGame?.(gameId);
+          if (offExisting) {
+            if (updatedHtmlText) {
+              await window.GHUB_PWA.saveOfflineGame(fullUpdatedGame, updatedHtmlText);
+            } else {
+              await window.GHUB_PWA.saveOfflineGameById(fullUpdatedGame);
+            }
+          }
+        } catch (e) {}
+
+        // アップデート内容の記録（入力あり or ファイル更新時に記録）
+        const changelog = changelogInput || (newGameFilePayload ? 'ゲームファイルをアップデートしました！' : '');
         if (changelog) {
           const updateRecord = {
             game_id: gameId,
             version_title: versionTitle,
             changelog,
             author_email: currentUser?.email || currentGame.author_email || '',
-            updated_at: new Date().toISOString()
+            updated_at: nowIso
           };
 
-          // 1. サーバーAPIへ保存
           try {
             await fetch('/api/game-updates', {
               method: 'POST',
@@ -3280,22 +3495,32 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
             });
           } catch (e) {}
 
-          // 2. Supabase game_updates テーブルへ挿入試行
           try {
             await supabase.from('game_updates').insert(updateRecord);
           } catch (e) {}
 
-          // 3. localStorage にも保存
           try {
             const local = JSON.parse(localStorage.getItem(`ghub_updates_${gameId}`) || '[]');
             local.unshift(updateRecord);
             localStorage.setItem(`ghub_updates_${gameId}`, JSON.stringify(local));
           } catch (e) {}
+
+          // ロビーにも更新通知を流してアクティブユーザーの再訪を促す
+          fetch('/api/lobby', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              author: (currentUser?.email || currentGame.author_email || 'Creator').split('@')[0],
+              kind: 'release',
+              game_id: gameId,
+              message: `🔄 『${title}』がアップデート (${versionTitle}): ${changelog.slice(0, 90)}`
+            })
+          }).catch(() => {});
         }
 
         alert('🎉 ゲームの編集・アップデートを公開しました！');
         closeEditModal();
-        window.location.reload();
+        window.location.href = `play.html?id=${encodeURIComponent(gameId)}&t=${Date.now()}`;
       } catch (err) {
         alert('更新失敗: ' + err.message);
         saveBtn.disabled = false;
@@ -3619,6 +3844,7 @@ private static extern void RequestGHubPayment(string itemId, string itemName, in
     }
 
     window.openShareModal = async () => {
+      markDailyActivity('share');
       const { title, tag, url, fullText } = getShareTextAndUrl();
 
       // Web Share APIが利用可能かつモバイルの場合はOS共有を優先試行

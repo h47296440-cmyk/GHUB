@@ -113,11 +113,24 @@
         <span>📥</span> ダウンロード / PWA保存
       </button>
 
-      <button type="button" onclick="openPublishDrawer()" class="bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 hover:opacity-95 text-white font-black px-4 py-1.5 rounded-xl text-xs shadow-lg shadow-indigo-500/25 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
+      <button type="button" onclick="openPublishDrawer()" id="studio-header-pub-btn" class="bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 hover:opacity-95 text-white font-black px-4 py-1.5 rounded-xl text-xs shadow-lg shadow-indigo-500/25 transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap">
         <span>🚀</span> G-HUBへ公開
       </button>
     </div>
   </header>
+
+  <div id="studio-edit-banner" class="hidden bg-amber-500/15 border-b border-amber-500/40 px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+    <div class="flex items-center gap-2 text-amber-200 font-bold">
+      <span>✏️</span>
+      <span>既存ゲームのアップデート編集中: <strong id="studio-edit-target-title" class="text-white">...</strong></span>
+    </div>
+    <div class="flex items-center gap-2">
+      <a id="studio-edit-back-link" href="play.html" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded-lg font-bold">← ゲームページへ</a>
+      <button type="button" onclick="switchToNewGameMode()" class="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 px-2.5 py-1 rounded-lg font-bold cursor-pointer">
+        📄 新規作品として切り離す
+      </button>
+    </div>
+  </div>
 
   <!-- ダウンロードドロップダウン / バー -->
   <div id="download-menu-bar" class="hidden bg-[#12192b] border-b border-slate-800 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -257,8 +270,8 @@
     <div class="bg-[#101624] border border-slate-700 p-6 rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl text-xs space-y-4">
       <div class="flex justify-between items-center border-b border-slate-800 pb-3">
         <div>
-          <h2 class="text-base font-black text-white flex items-center gap-2">🚀 G-HUBへシームレス公開</h2>
-          <p class="text-[11px] text-slate-400 mt-0.5">テストした現在のコードがそのままG-HUBカタログに公開されます</p>
+          <h2 id="publish-modal-title" class="text-base font-black text-white flex items-center gap-2">🚀 G-HUBへシームレス公開</h2>
+          <p id="publish-modal-subtitle" class="text-[11px] text-slate-400 mt-0.5">テストした現在のコードがそのままG-HUBカタログに公開されます</p>
         </div>
         <button type="button" onclick="closePublishDrawer()" class="text-slate-400 hover:text-white text-base">✕</button>
       </div>
@@ -340,6 +353,12 @@
           <label class="block font-bold mb-1 text-slate-300">操作方法・説明</label>
           <textarea id="pub-desc" rows="3" placeholder="遊び方や操作方法を入力..." class="w-full bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl text-white outline-none focus:border-indigo-500"></textarea>
         </div>
+
+        <div id="pub-changelog-box" class="hidden bg-indigo-950/40 border border-indigo-500/30 rounded-2xl p-3 space-y-2">
+          <label class="block font-bold text-indigo-300">📢 アップデート履歴メモ</label>
+          <input type="text" id="pub-version-title" placeholder="バージョン名 (例: v1.1 バランス調整)" class="w-full bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg text-white outline-none">
+          <textarea id="pub-changelog" rows="2" placeholder="変更内容 (例: 新ステージ追加・操作性改善)" class="w-full bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg text-white outline-none"></textarea>
+        </div>
       </div>
 
       <div class="flex gap-2 pt-2">
@@ -366,6 +385,8 @@
     let sandboxOwnedItems = new Set();
     let lastCompiledHtml = '';
     let autoRunTimer = null;
+    let editingGameId = null;
+    let editingGameMeta = null;
 
     const filesState = {
       html: '',
@@ -1296,6 +1317,65 @@ export default function App() {
       studioLog(`🔑 ${email} でログインしました！`);
     };
 
+    function applyEditModeUI(gameMeta) {
+      const banner = document.getElementById('studio-edit-banner');
+      const bannerTitle = document.getElementById('studio-edit-target-title');
+      const backLink = document.getElementById('studio-edit-back-link');
+      const headerBtn = document.getElementById('studio-header-pub-btn');
+      const modalTitle = document.getElementById('publish-modal-title');
+      const modalSub = document.getElementById('publish-modal-subtitle');
+      const submitBtn = document.getElementById('studio-publish-submit');
+      const changelogBox = document.getElementById('pub-changelog-box');
+
+      if (editingGameId && gameMeta) {
+        if (banner) banner.classList.remove('hidden');
+        if (bannerTitle) bannerTitle.innerText = gameMeta.title || editingGameId;
+        if (backLink) backLink.href = `play.html?id=${encodeURIComponent(editingGameId)}`;
+        if (headerBtn) headerBtn.innerHTML = '<span>🔄</span> 更新を公開';
+        if (modalTitle) modalTitle.innerText = '🔄 既存ゲームをアップデート公開';
+        if (modalSub) modalSub.innerText = `『${gameMeta.title || '作品'}』を上書き更新します（いいね・プレイ数は引き継がれます）`;
+        if (submitBtn) submitBtn.innerText = '🔄 この内容でアップデート公開';
+        if (changelogBox) changelogBox.classList.remove('hidden');
+      } else {
+        if (banner) banner.classList.add('hidden');
+        if (headerBtn) headerBtn.innerHTML = '<span>🚀</span> G-HUBへ公開';
+        if (modalTitle) modalTitle.innerText = '🚀 G-HUBへシームレス公開';
+        if (modalSub) modalSub.innerText = 'テストした現在のコードがそのままG-HUBカタログに公開されます';
+        if (submitBtn) submitBtn.innerText = '🚀 今すぐ公開する';
+        if (changelogBox) changelogBox.classList.add('hidden');
+      }
+    }
+
+    window.switchToNewGameMode = () => {
+      editingGameId = null;
+      editingGameMeta = null;
+      applyEditModeUI(null);
+      studioLog('📄 新規公開モードに切り替えました（既存ゲームには上書きされません）');
+    };
+
+    async function studioBlobToCompactDataUrl(blob) {
+      return new Promise((resolve) => {
+        try {
+          const url = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = 640; canvas.height = 360;
+              const ctx = canvas.getContext('2d');
+              const scale = Math.max(640 / img.width, 360 / img.height);
+              const dw = img.width * scale, dh = img.height * scale;
+              ctx.drawImage(img, (640 - dw)/2, (360 - dh)/2, dw, dh);
+              URL.revokeObjectURL(url);
+              resolve(canvas.toDataURL('image/jpeg', 0.78));
+            } catch (e) { URL.revokeObjectURL(url); resolve(null); }
+          };
+          img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+          img.src = url;
+        } catch (e) { resolve(null); }
+      });
+    }
+
     window.publishStudioGame = async () => {
       const title = document.getElementById('pub-title').value.trim();
       if (!title) return alert('タイトルを入力してください！');
@@ -1306,23 +1386,29 @@ export default function App() {
         return alert('公開するにはログインが必要です（入力済みのコードは保持されています）');
       }
 
+      const isUpdateMode = Boolean(editingGameId);
       const btn = document.getElementById('studio-publish-submit');
       btn.disabled = true;
-      btn.innerText = '🚀 公開処理中...';
+      btn.innerText = isUpdateMode ? '🔄 アップデート保存中...' : '🚀 公開処理中...';
 
       try {
+        const nowIso = new Date().toISOString();
         const finalHtml = await compileStudioHtml();
-        const gameId = crypto.randomUUID();
+        const gameId = isUpdateMode ? editingGameId : crypto.randomUUID();
         const payloadBlob = new Blob([finalHtml], { type: 'text/html' });
 
         // 1. サーバーAPI (/api/games/payload) に確実に保存（Supabase Storage障害でも必ず動く二重保証）
-        let entryUrl = `/api/games/payload/${encodeURIComponent(gameId)}`;
+        let entryUrl = `/api/games/payload/${encodeURIComponent(gameId)}?v=${Date.now()}`;
         try {
-          await fetch('/api/games/payload', {
+          const pRes = await fetch('/api/games/payload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ game_id: gameId, filename: 'index.html', contentType: 'text/html', textData: finalHtml })
           });
+          if (pRes.ok) {
+            const pj = await pRes.json();
+            if (pj?.entry_url) entryUrl = `${pj.entry_url}?v=${Date.now()}`;
+          }
         } catch (e) {}
 
         // 2. Supabase Storage アップロード
@@ -1330,18 +1416,27 @@ export default function App() {
           const { error: upErr } = await supabase.storage.from('games').upload(`${gameId}/index.html`, payloadBlob, { contentType: 'text/html', upsert: true });
           if (!upErr) {
             const pub = supabase.storage.from('games').getPublicUrl(`${gameId}/index.html`)?.data?.publicUrl;
-            if (pub) entryUrl = pub;
+            if (pub) entryUrl = `${pub}?t=${Date.now()}`;
           }
         } catch (e) {}
 
-        let thumbnailUrl = null;
+        let thumbnailUrl = isUpdateMode ? (editingGameMeta?.thumbnail_url || null) : null;
         if (studioThumbBlob) {
+          let thumbSaved = false;
           try {
             const { error: tErr } = await supabase.storage.from('games').upload(`${gameId}/thumbnail.jpg`, studioThumbBlob, { contentType: 'image/jpeg', upsert: true });
             if (!tErr) {
-              thumbnailUrl = supabase.storage.from('games').getPublicUrl(`${gameId}/thumbnail.jpg`)?.data?.publicUrl || null;
+              const pubThumb = supabase.storage.from('games').getPublicUrl(`${gameId}/thumbnail.jpg`)?.data?.publicUrl;
+              if (pubThumb) {
+                thumbnailUrl = `${pubThumb}?t=${Date.now()}`;
+                thumbSaved = true;
+              }
             }
           } catch (e) {}
+          if (!thumbSaved) {
+            const fallbackDataUrl = await studioBlobToCompactDataUrl(studioThumbBlob);
+            if (fallbackDataUrl) thumbnailUrl = fallbackDataUrl;
+          }
         }
 
         const platformsList = [];
@@ -1353,28 +1448,56 @@ export default function App() {
         const trialMinutes = parseInt(document.getElementById('pub-trial').value, 10) || 0;
         const desc = document.getElementById('pub-desc').value.trim();
         const isEvent = document.getElementById('pub-event').checked;
+        const versionTitle = (document.getElementById('pub-version-title')?.value || '').trim() || 'Studioアップデート';
+        const changelog = (document.getElementById('pub-changelog')?.value || '').trim() || (isUpdateMode ? 'G-HUB Studioからゲームを更新しました！' : '');
 
-        const supaRecord = {
+        if (isUpdateMode) {
+          const updateFields = {
+            title,
+            tag,
+            description: desc,
+            entry_url: entryUrl,
+            ...(thumbnailUrl ? { thumbnail_url: thumbnailUrl } : {}),
+            platforms: platformsList.join(',') || 'pc,mobile',
+            price_coins: price,
+            is_event: isEvent
+          };
+          await supabase.from('games').update(updateFields).eq('id', gameId).catch(() => {});
+        } else {
+          const supaRecord = {
+            id: gameId,
+            title,
+            tag,
+            description: desc,
+            entry_url: entryUrl,
+            thumbnail_url: thumbnailUrl,
+            author_email: user.email,
+            platforms: platformsList.join(',') || 'pc,mobile',
+            price_coins: price,
+            is_event: isEvent,
+            likes_count: 0,
+            play_count: 0
+          };
+          await supabase.from('games').insert(supaRecord).catch(() => {});
+        }
+
+        const fullRecord = {
+          ...(editingGameMeta || {}),
           id: gameId,
           title,
           tag,
           description: desc,
           entry_url: entryUrl,
           thumbnail_url: thumbnailUrl,
-          author_email: user.email,
+          author_email: editingGameMeta?.author_email || user.email,
           platforms: platformsList.join(',') || 'pc,mobile',
           price_coins: price,
           is_event: isEvent,
-          likes_count: 0,
-          play_count: 0
-        };
-
-        await supabase.from('games').insert(supaRecord).catch(() => {});
-
-        const fullRecord = {
-          ...supaRecord,
+          likes_count: editingGameMeta?.likes_count ?? 0,
+          play_count: editingGameMeta?.play_count ?? 0,
           trial_duration_minutes: trialMinutes,
-          created_at: new Date().toISOString()
+          created_at: editingGameMeta?.created_at || nowIso,
+          updated_at: nowIso
         };
 
         await fetch('/api/games', {
@@ -1383,21 +1506,40 @@ export default function App() {
           body: JSON.stringify(fullRecord)
         }).catch(() => {});
 
-        if (trialMinutes > 0) {
-          fetch('/api/game-trials', {
+        fetch('/api/game-trials', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ game_id: gameId, trial_minutes: trialMinutes })
+        }).catch(() => {});
+        localStorage.setItem(`ghub_trial_${gameId}`, String(trialMinutes));
+
+        if (isUpdateMode && changelog) {
+          const updRecord = {
+            game_id: gameId,
+            version_title: versionTitle,
+            changelog,
+            author_email: user.email,
+            updated_at: nowIso
+          };
+          fetch('/api/game-updates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ game_id: gameId, trial_minutes: trialMinutes })
+            body: JSON.stringify(updRecord)
           }).catch(() => {});
-          localStorage.setItem(`ghub_trial_${gameId}`, String(trialMinutes));
+          supabase.from('game_updates').insert(updRecord).catch(() => {});
+          try {
+            const locUpd = JSON.parse(localStorage.getItem(`ghub_updates_${gameId}`) || '[]');
+            locUpd.unshift(updRecord);
+            localStorage.setItem(`ghub_updates_${gameId}`, JSON.stringify(locUpd));
+          } catch (e) {}
         }
 
-        // PWAオフラインにも即時キャッシュ
+        // PWAオフラインにも即時キャッシュ/更新
         if (window.GHUB_PWA) {
           await window.GHUB_PWA.saveOfflineGame(fullRecord, finalHtml).catch(() => {});
         }
 
-        // ロビーに新作公開通知を投稿して盛り上げる
+        // ロビーに新作/更新通知を投稿して盛り上げる
         fetch('/api/lobby', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1405,34 +1547,136 @@ export default function App() {
             author: user.email.split('@')[0],
             kind: 'release',
             game_id: gameId,
-            message: `🚀 G-HUB Studioから新作『${title}』(${tag}) を公開しました！ぜひ遊んでみてください！`
+            message: isUpdateMode
+              ? `🔄 Studioで『${title}』をアップデート (${versionTitle}): ${changelog.slice(0, 80)}`
+              : `🚀 G-HUB Studioから新作『${title}』(${tag}) を公開しました！ぜひ遊んでみてください！`
           })
         }).catch(() => {});
 
         try {
           const localGames = JSON.parse(localStorage.getItem('ghub_local_games') || '[]');
-          localGames.unshift(fullRecord);
+          const exIdx = localGames.findIndex(g => g.id === gameId);
+          if (exIdx >= 0) localGames[exIdx] = fullRecord;
+          else localGames.unshift(fullRecord);
           localStorage.setItem('ghub_local_games', JSON.stringify(localGames));
         } catch (e) {}
 
-        studioLog(`🎉 公開完了！ ${title}`);
-        alert(`🎉 「${title}」をG-HUBに公開しました！（PWAオフライン保存も完了）`);
-        window.location.href = `play.html?id=${encodeURIComponent(gameId)}`;
+        // デイリークエスト (create1) 達成マーク
+        try {
+          const today = new Date().toISOString().split('T')[0];
+          const actKey = `ghub_daily_activity_${today}`;
+          const act = JSON.parse(localStorage.getItem(actKey) || '{}');
+          act.create = true;
+          localStorage.setItem(actKey, JSON.stringify(act));
+        } catch (e) {}
+
+        studioLog(isUpdateMode ? `🔄 更新公開完了！ ${title}` : `🎉 公開完了！ ${title}`);
+        alert(isUpdateMode
+          ? `🔄 「${title}」のアップデートを公開しました！`
+          : `🎉 「${title}」をG-HUBに公開しました！（PWAオフライン保存も完了）`);
+        window.location.href = `play.html?id=${encodeURIComponent(gameId)}&t=${Date.now()}`;
       } catch (err) {
         studioLog('公開失敗: ' + err.message, true);
         alert('公開に失敗しました: ' + err.message);
         btn.disabled = false;
-        btn.innerText = '🚀 今すぐ公開する';
+        btn.innerText = isUpdateMode ? '🔄 この内容でアップデート公開' : '🚀 今すぐ公開する';
       }
     };
+
+    async function loadGameForStudioEdit(targetId) {
+      studioLog(`✏️ 既存ゲーム (${targetId}) のコードを読み込み中...`);
+      let game = null;
+      try {
+        const { data } = await supabase.from('games').select('*').eq('id', targetId).single();
+        if (data) game = data;
+      } catch (e) {}
+      try {
+        const sRes = await fetch(`/api/games?id=${encodeURIComponent(targetId)}&t=${Date.now()}`);
+        if (sRes.ok) {
+          const sg = await sRes.json();
+          if (sg && sg.id) {
+            const gTime = game?.updated_at ? new Date(game.updated_at).getTime() : 0;
+            const sTime = sg.updated_at ? new Date(sg.updated_at).getTime() : 0;
+            game = !game || sTime >= gTime ? { ...(game || {}), ...sg } : { ...sg, ...game };
+          }
+        }
+      } catch (e) {}
+      try {
+        const localGames = JSON.parse(localStorage.getItem('ghub_local_games') || '[]');
+        const lg = localGames.find(g => g.id === targetId);
+        if (lg) {
+          const gTime = game?.updated_at ? new Date(game.updated_at).getTime() : 0;
+          const lTime = lg.updated_at ? new Date(lg.updated_at).getTime() : 0;
+          if (!game || lTime >= gTime) game = { ...(game || {}), ...lg };
+        }
+      } catch (e) {}
+
+      if (!game) {
+        studioLog('⚠️ 編集対象のゲームが見つかりませんでした', true);
+        applyTemplate('clicker');
+        return;
+      }
+
+      editingGameId = targetId;
+      editingGameMeta = game;
+      applyEditModeUI(game);
+
+      document.getElementById('pub-title').value = game.title || '';
+      document.getElementById('pub-tag').value = game.tag || 'Action';
+      document.getElementById('pub-price').value = String(game.price_coins || 0);
+      document.getElementById('pub-trial').value = String(game.trial_duration_minutes || 0);
+      document.getElementById('pub-desc').value = game.description || '';
+      document.getElementById('pub-event').checked = Boolean(game.is_event);
+      if (game.thumbnail_url) {
+        document.getElementById('publish-thumb-preview').innerHTML = `<img src="${game.thumbnail_url}" class="w-full h-full object-cover">`;
+      }
+
+      let codeHtml = '';
+      const urlsToTry = [`/api/games/payload/${encodeURIComponent(targetId)}?v=${Date.now()}`];
+      if (game.entry_url) {
+        let eu = game.entry_url;
+        if (eu.includes('supabase.co')) {
+          eu = eu.replace(/https:\/\/[^/]+\.supabase\.co/, window.location.origin + '/supabase');
+        }
+        urlsToTry.unshift(eu);
+      }
+
+      for (const u of urlsToTry) {
+        try {
+          const res = await fetch(u, { cache: 'no-store' });
+          if (res.ok) {
+            const text = await res.text();
+            if (text && (text.includes('<html') || text.includes('<!DOCTYPE') || text.includes('<script'))) {
+              codeHtml = text;
+              break;
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (codeHtml) {
+        filesState.html = codeHtml;
+        editorMode = 'html';
+        document.getElementById('editor-mode-select').value = 'html';
+        switchEditorMode('html');
+        studioLog(`✅ 『${game.title}』のソースコードを読み込みました！編集後に「🔄 更新を公開」を押してください`);
+        runStudioPreview();
+      } else {
+        studioLog('⚠️ 既存HTMLを取得できなかったためテンプレートを表示しました（Zip形式などは詳細編集から差し替え可能です）');
+        applyTemplate('clicker');
+      }
+    }
 
     // 初期起動: URLクエリまたはドラフトまたはデフォルトテンプレートを読み込む
     (function bootStudio() {
       const params = new URLSearchParams(window.location.search);
+      const urlEditId = params.get('edit');
       const urlPrompt = params.get('prompt');
       const urlTemplate = params.get('template');
 
-      if (urlTemplate && TEMPLATES[urlTemplate]) {
+      if (urlEditId) {
+        loadGameForStudioEdit(urlEditId);
+      } else if (urlTemplate && TEMPLATES[urlTemplate]) {
         applyTemplate(urlTemplate);
       } else {
         let restored = false;

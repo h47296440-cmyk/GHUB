@@ -181,6 +181,10 @@
           <span id="theme-icon">🌙</span>
         </button>
 
+        <button onclick="copyInviteLink()" id="header-invite-btn" class="bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-3 py-1.5 rounded-xl font-bold transition whitespace-nowrap shrink-0" title="友達を招待するリンクをコピー">
+          🤝 招待
+        </button>
+
         <button onclick="openFriendModal()" class="bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-xl transition whitespace-nowrap shrink-0">
           Friends
         </button>
@@ -233,6 +237,20 @@
             マイページ →
           </a>
         </div>
+      </div>
+    </div>
+
+    <div id="referral-welcome-banner" class="hidden bg-gradient-to-r from-indigo-600/15 via-emerald-600/15 to-amber-500/15 border border-indigo-400/40 rounded-2xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div class="flex items-center gap-2.5">
+        <span class="text-xl">🎁</span>
+        <div>
+          <span class="font-black text-slate-900 dark:text-white">ようこそ G-HUB へ！</span>
+          <span id="referral-inviter-msg" class="text-slate-600 dark:text-slate-300 ml-1">友達の紹介リンクからアクセスしました。登録不要・0秒で今すぐ遊べます！</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" onclick="launchInstantRoulette()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-3 py-1.5 rounded-xl cursor-pointer">⚡ 1秒で遊んでみる</button>
+        <button type="button" onclick="document.getElementById('referral-welcome-banner').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 dark:hover:text-white px-1">✕</button>
       </div>
     </div>
 
@@ -341,6 +359,66 @@
       </div>
     </section>
 
+    <!-- 🎯 本日のデイリークエスト & 友達招待（リテンション・拡散） -->
+    <section id="daily-quests-section" aria-label="デイリークエストと招待" class="bg-white dark:bg-[#101624] border border-indigo-200/80 dark:border-indigo-500/30 rounded-2xl p-4 shadow-sm space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-0.5 rounded-lg bg-indigo-600 text-white text-[10px] font-black font-mono">DAILY QUESTS</span>
+          <h2 class="font-display font-extrabold text-sm text-slate-900 dark:text-white">🎯 毎日遊んでコイン獲得（1日最大 +70 G）</h2>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <span class="text-[11px] font-mono text-slate-500 dark:text-slate-400">招待実績: <strong id="invite-count-val" class="text-emerald-600 dark:text-emerald-400">0</strong> 人</span>
+          <button type="button" onclick="copyInviteLink()" id="quest-invite-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] px-3 py-1.5 rounded-xl shadow-sm transition cursor-pointer">
+            🤝 友達招待リンクをコピー
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-xs">
+        <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-bold text-slate-800 dark:text-slate-100">🎮 ゲームを1本遊ぶ</div>
+            <div class="text-[10px] text-slate-500 dark:text-slate-400">おまかせ即プレイでもOK</div>
+          </div>
+          <button type="button" id="quest-btn-play1" onclick="claimDailyQuest('play1')" class="shrink-0 px-3 py-1.5 rounded-lg font-black text-[11px] bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 transition cursor-pointer">
+            +20 G
+          </button>
+        </div>
+        <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-bold text-slate-800 dark:text-slate-100">❤️ いいね / ロビー発言</div>
+            <div class="text-[10px] text-slate-500 dark:text-slate-400">感想や応援で盛り上げよう</div>
+          </div>
+          <button type="button" id="quest-btn-social1" onclick="claimDailyQuest('social1')" class="shrink-0 px-3 py-1.5 rounded-lg font-black text-[11px] bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 transition cursor-pointer">
+            +20 G
+          </button>
+        </div>
+        <div class="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <div class="font-bold text-slate-800 dark:text-slate-100">🔗 ゲームを共有 or Studio投稿</div>
+            <div class="text-[10px] text-slate-500 dark:text-slate-400">友達に教えるだけで達成</div>
+          </div>
+          <button type="button" id="quest-btn-create1" onclick="claimDailyQuest('create1')" class="shrink-0 px-3 py-1.5 rounded-lg font-black text-[11px] bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 transition cursor-pointer">
+            +30 G
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 🔄 最近アップデートされた注目作品ストリップ -->
+    <section id="recent-updates-section" class="hidden bg-white dark:bg-[#101624] border border-cyan-300/60 dark:border-cyan-500/30 rounded-2xl p-4 shadow-sm space-y-2.5">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-0.5 rounded-lg bg-cyan-500 text-slate-950 text-[10px] font-black font-mono">UPDATED</span>
+          <h2 class="font-display font-extrabold text-sm text-slate-900 dark:text-white">🔄 最近アップデートされたゲーム</h2>
+        </div>
+        <button type="button" onclick="selectTab('updated', document.getElementById('tab-updated-btn'))" class="text-xs text-cyan-600 dark:text-cyan-400 hover:underline font-bold cursor-pointer">
+          更新順で見る →
+        </button>
+      </div>
+      <div id="recent-updates-strip" class="flex gap-2.5 overflow-x-auto no-scrollbar pb-1"></div>
+    </section>
+
     <!-- 🔥 今のトレンドゲーム (2026 TRENDING NOW) -->
     <section id="trending-games-section" aria-label="今のトレンドゲーム" class="bg-white dark:bg-[#101624] border border-amber-300/60 dark:border-amber-500/30 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -427,9 +505,11 @@
         <div class="flex gap-1.5 overflow-x-auto no-scrollbar w-full md:w-auto pb-1 md:pb-0" id="tag-filters">
           <button onclick="selectTab('all', this)" class="tag-btn active px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white shadow-sm transition whitespace-nowrap">すべて</button>
           <button id="tab-trending-btn" onclick="selectTab('trending', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">🔥 トレンド</button>
+          <button id="tab-updated-btn" onclick="selectTab('updated', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">🔄 最近更新</button>
           <button id="tab-quick-btn" onclick="selectTab('quick', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">⚡ サクッと即遊び</button>
           <button onclick="selectTab('new', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">🆕 新作</button>
           <button id="tab-ranking-btn" onclick="selectTab('ranking', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">👑 ランキング</button>
+          <button id="tab-following-btn" onclick="selectTab('following', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">⭐ フォロー中</button>
           <button onclick="selectTab('recent', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">🕒 履歴</button>
           <button id="tab-offline-btn" onclick="selectTab('offline', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">📥 保存済み (<span id="offline-saved-count">0</span>)</button>
           <button onclick="selectTab('free', this)" class="tag-btn px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition whitespace-nowrap">🆓 無料</button>
@@ -880,6 +960,21 @@
       renderGames();
     });
 
+    function mergeNewerCatalogGame(baseGame, candGame) {
+      if (!baseGame) return candGame;
+      if (!candGame) return baseGame;
+      const bt = baseGame.updated_at ? new Date(baseGame.updated_at).getTime() : 0;
+      const ct = candGame.updated_at ? new Date(candGame.updated_at).getTime() : 0;
+      if (ct > bt) return { ...baseGame, ...candGame };
+      if (bt > ct) return { ...candGame, ...baseGame };
+      return {
+        ...baseGame,
+        ...candGame,
+        play_count: Math.max(Number(baseGame.play_count) || 0, Number(candGame.play_count) || 0),
+        likes_count: Math.max(Number(baseGame.likes_count) || 0, Number(candGame.likes_count) || 0)
+      };
+    }
+
     // --- 高速・ノンブロッキング ゲーム読み込み（マルチレイヤー & オフラインPWA対応） ---
     async function loadGames() {
       try {
@@ -893,13 +988,13 @@
         } catch (e) {}
 
         try {
-          const sRes = await fetch('/api/games');
+          const sRes = await fetch(`/api/games?t=${Date.now()}`);
           if (sRes.ok) {
             const serverGames = await sRes.json();
             if (Array.isArray(serverGames)) {
               serverGames.forEach(sg => {
                 const existingIdx = games.findIndex(g => g.id === sg.id);
-                if (existingIdx >= 0) games[existingIdx] = { ...games[existingIdx], ...sg };
+                if (existingIdx >= 0) games[existingIdx] = mergeNewerCatalogGame(games[existingIdx], sg);
                 else games.push(sg);
               });
             }
@@ -911,7 +1006,7 @@
           if (Array.isArray(localGames)) {
             localGames.forEach(lg => {
               const existingIdx = games.findIndex(g => g.id === lg.id);
-              if (existingIdx >= 0) games[existingIdx] = { ...games[existingIdx], ...lg };
+              if (existingIdx >= 0) games[existingIdx] = mergeNewerCatalogGame(games[existingIdx], lg);
               else games.unshift(lg);
             });
           }
@@ -1021,6 +1116,7 @@
       const source = unplayed.length > 0 ? unplayed : pool;
       const chosen = source[Math.floor(Math.random() * source.length)];
       bumpPlayCombo();
+      markDailyActivity('play');
       window.location.href = `play.html?id=${encodeURIComponent(chosen.id)}`;
     };
 
@@ -1086,6 +1182,7 @@
       const game = shortsQueue[shortsIndex];
       if (!game) return;
       playSfx('like');
+      markDailyActivity('social');
       const nextLikes = (Number(game.likes_count) || 0) + 1;
       game.likes_count = nextLikes;
       document.getElementById('shorts-like-count').innerText = String(nextLikes);
@@ -1271,6 +1368,14 @@
       if (currentTab === 'trending') {
         filtered = filtered.filter(g => g.is_trending || String(g.id).startsWith('trend-') || (g.play_count || 0) >= 100);
         filtered.sort((a, b) => ((b.is_trending ? 1 : 0) - (a.is_trending ? 1 : 0)) || ((b.play_count || 0) - (a.play_count || 0)));
+      } else if (currentTab === 'updated') {
+        filtered.sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0));
+      } else if (currentTab === 'following') {
+        let followed = [];
+        try {
+          followed = JSON.parse(localStorage.getItem('ghub_followed_authors') || '[]').map(x => String(x || '').trim().toLowerCase());
+        } catch (e) {}
+        filtered = filtered.filter(g => followed.includes(String(g.author_email || '').trim().toLowerCase()));
       } else if (currentTab === 'new') {
         filtered.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
       } else if (currentTab === 'ranking') {
@@ -1341,6 +1446,8 @@
           rankBadge = `<span class="absolute top-2.5 right-2.5 z-20 ${rankColor} text-[10px] px-2 py-0.5 rounded-md shadow-md font-mono tabular-nums">#${index + 1}</span>`;
         } else if (isOfflineSaved) {
           rankBadge = `<span class="absolute top-2.5 right-2.5 z-20 bg-emerald-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-md shadow-sm font-mono">✈️ オフライン可</span>`;
+        } else if (g.updated_at && (Date.now() - new Date(g.updated_at).getTime() < 1000 * 60 * 60 * 72)) {
+          rankBadge = `<span class="absolute top-2.5 right-2.5 z-20 bg-cyan-400 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-md shadow-sm font-mono">🔄 更新済</span>`;
         } else if (g.is_trending) {
           rankBadge = `<span class="absolute top-2.5 right-2.5 z-20 bg-gradient-to-r from-amber-400 to-rose-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-md shadow-sm font-mono">${escapeHtml(g.trend_badge || '🔥 TREND')}</span>`;
         } else if (g.is_event) {
@@ -1853,6 +1960,7 @@
     let currentShareGame = null;
 
     window.quickShareGame = async (gameId) => {
+      markDailyActivity('share');
       const game = allGames.find(g => g.id === gameId);
       if (!game) return;
       currentShareGame = game;
@@ -1860,7 +1968,8 @@
       const title = game.title || 'インディーゲーム';
       const desc = game.description || '';
       const tag = game.tag || 'Game';
-      const playUrl = `${window.location.origin}/play.html?id=${encodeURIComponent(game.id)}`;
+      const refSuffix = currentUser?.email ? `&ref=${encodeURIComponent(currentUser.email.split('@')[0])}` : '';
+      const playUrl = `${window.location.origin}/play.html?id=${encodeURIComponent(game.id)}${refSuffix}`;
       const cleanDesc = desc ? `「${desc.slice(0, 60)}${desc.length > 60 ? '...' : ''}」\n` : '';
       const fullText = `【G-HUB】『${title}』をプレイ！🎮\n${cleanDesc}ブラウザですぐに遊べるインディーゲーム✨\n👉 今すぐプレイ: ${playUrl}\n#GHUB #${tag} #IndieGames`;
 
@@ -2187,6 +2296,7 @@
         });
         if (res.ok) {
           if (msgEl) msgEl.value = '';
+          markDailyActivity('social');
           playSfx('combo');
           await loadLobbyPosts();
         }
@@ -2197,11 +2307,222 @@
       }
     };
 
+    // --- 🎯 デイリークエスト・招待・更新フィード（アクティブユーザー増加施策） ---
+    function getVisitorId() {
+      let vid = localStorage.getItem('ghub_visitor_id');
+      if (!vid) {
+        vid = 'v_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+        localStorage.setItem('ghub_visitor_id', vid);
+      }
+      return vid;
+    }
+
+    function getQuestIdentity() {
+      if (currentUser?.email) return currentUser.email.trim().toLowerCase();
+      return getVisitorId();
+    }
+
+    function getInviteCode() {
+      if (currentUser?.email) return currentUser.email.split('@')[0];
+      return getVisitorId().slice(0, 10);
+    }
+
+    function markDailyActivity(kind) {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const key = `ghub_daily_activity_${today}`;
+        const cur = JSON.parse(localStorage.getItem(key) || '{}');
+        cur[kind] = true;
+        localStorage.setItem(key, JSON.stringify(cur));
+        refreshDailyQuestUI();
+      } catch (e) {}
+    }
+
+    function getDailyActivity() {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const base = JSON.parse(localStorage.getItem(`ghub_daily_activity_${today}`) || '{}');
+        const recent = JSON.parse(localStorage.getItem('ghub_recent_games') || '[]');
+        if (recent.length > 0 && !base.play) {
+          // 最近遊んだゲームがあればプレイ実績として認識しやすいよう補助
+        }
+        return base;
+      } catch (e) {
+        return {};
+      }
+    }
+
+    let claimedQuestsToday = [];
+
+    async function refreshDailyQuestUI() {
+      const act = getDailyActivity();
+      const map = {
+        play1: { done: Boolean(act.play), reward: 20 },
+        social1: { done: Boolean(act.social), reward: 20 },
+        create1: { done: Boolean(act.share || act.create), reward: 30 }
+      };
+
+      for (const [qid, info] of Object.entries(map)) {
+        const btn = document.getElementById(`quest-btn-${qid}`);
+        if (!btn) continue;
+        const isClaimed = claimedQuestsToday.includes(qid);
+        if (isClaimed) {
+          btn.innerText = '✓ 獲得済';
+          btn.className = 'shrink-0 px-3 py-1.5 rounded-lg font-black text-[11px] bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-500/40';
+        } else if (info.done) {
+          btn.innerText = `受取 +${info.reward}G`;
+          btn.className = 'shrink-0 px-3 py-1.5 rounded-lg font-black text-[11px] bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 shadow cursor-pointer animate-pulse';
+        } else {
+          btn.innerText = `+${info.reward} G`;
+          btn.className = 'shrink-0 px-3 py-1.5 rounded-lg font-bold text-[11px] bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 cursor-pointer';
+        }
+      }
+    }
+
+    async function loadDailyQuestStatus() {
+      try {
+        const res = await fetch(`/api/quests/status?identity=${encodeURIComponent(getQuestIdentity())}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.claimed)) claimedQuestsToday = data.claimed;
+        }
+      } catch (e) {}
+      refreshDailyQuestUI();
+    }
+
+    window.claimDailyQuest = async (questId) => {
+      if (claimedQuestsToday.includes(questId)) return;
+      const act = getDailyActivity();
+      const isReady = (questId === 'play1' && act.play)
+        || (questId === 'social1' && act.social)
+        || (questId === 'create1' && (act.share || act.create));
+
+      if (!isReady) {
+        if (questId === 'play1') return launchInstantRoulette();
+        if (questId === 'social1') return document.getElementById('community-lobby-section')?.scrollIntoView({ behavior: 'smooth' });
+        if (questId === 'create1') return copyInviteLink();
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/quests/claim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identity: getQuestIdentity(), quest_id: questId })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          if (data.alreadyClaimed) {
+            claimedQuestsToday = data.claimed || claimedQuestsToday;
+            refreshDailyQuestUI();
+          }
+          return;
+        }
+        claimedQuestsToday = data.claimed || [...claimedQuestsToday, questId];
+        const reward = Number(data.reward) || 20;
+        if (currentUser?.email) {
+          userCoins += reward;
+          await client.from('profiles').update({ coins: userCoins }).eq('email', currentUser.email).catch(() => {});
+          const cEl = document.getElementById('coin-count');
+          const dEl = document.getElementById('dashboard-coins');
+          if (cEl) cEl.innerText = String(userCoins);
+          if (dEl) dEl.innerText = `${userCoins} G`;
+        } else {
+          const curGuest = Math.max(0, parseInt(localStorage.getItem('ghub_guest_coins') || '100', 10) || 0);
+          localStorage.setItem('ghub_guest_coins', String(curGuest + reward));
+        }
+        playSfx('combo');
+        refreshDailyQuestUI();
+        alert(`🎉 デイリークエスト達成！ +${reward} G を獲得しました！`);
+      } catch (e) {}
+    };
+
+    window.copyInviteLink = async () => {
+      markDailyActivity('share');
+      const code = getInviteCode();
+      const inviteUrl = `${window.location.origin}/?ref=${encodeURIComponent(code)}`;
+      const msg = `🎮 ダウンロード不要・0秒起動で遊べるインディーゲーム広場「G-HUB」！一緒に遊ぼう✨\n${inviteUrl}`;
+      const btn = document.getElementById('quest-invite-btn');
+      const hBtn = document.getElementById('header-invite-btn');
+      try {
+        await navigator.clipboard.writeText(msg);
+        playSfx('combo');
+        if (btn) {
+          const orig = btn.innerText;
+          btn.innerText = '✅ コピーしました！';
+          setTimeout(() => { btn.innerText = orig; }, 2200);
+        }
+        if (hBtn) {
+          const origH = hBtn.innerText;
+          hBtn.innerText = '✅ コピー済';
+          setTimeout(() => { hBtn.innerText = origH; }, 2200);
+        }
+      } catch (e) {
+        prompt('招待URLをコピーしてください:', inviteUrl);
+      }
+    };
+
+    async function handleReferralAndStats() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const ref = params.get('ref');
+        if (ref) {
+          const banner = document.getElementById('referral-welcome-banner');
+          const msg = document.getElementById('referral-inviter-msg');
+          if (banner) banner.classList.remove('hidden');
+          if (msg) msg.innerText = `${ref} さんの招待リンクから訪問しました。登録不要・0秒で今すぐ遊べます！`;
+          await fetch('/api/referrals/track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ref_code: ref, visitor_id: getVisitorId() })
+          }).catch(() => {});
+        }
+        const sRes = await fetch(`/api/referrals/stats?code=${encodeURIComponent(getInviteCode())}`);
+        if (sRes.ok) {
+          const st = await sRes.json();
+          const el = document.getElementById('invite-count-val');
+          if (el) el.innerText = String(st.count || 0);
+        }
+      } catch (e) {}
+    }
+
+    async function loadRecentUpdatesFeed() {
+      try {
+        const res = await fetch('/api/game-updates/recent');
+        if (!res.ok) return;
+        const updates = await res.json();
+        const section = document.getElementById('recent-updates-section');
+        const strip = document.getElementById('recent-updates-strip');
+        if (!section || !strip || !Array.isArray(updates) || updates.length === 0) return;
+
+        section.classList.remove('hidden');
+        strip.innerHTML = updates.map(u => `
+          <a href="play.html?id=${encodeURIComponent(u.game_id)}" onclick="playSfx('launch')" class="shrink-0 w-64 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-cyan-400 rounded-xl p-2.5 flex items-center gap-2.5 transition">
+            <div class="w-12 h-12 rounded-lg bg-slate-950 overflow-hidden shrink-0 flex items-center justify-center">
+              ${u.game_thumb ? `<img src="${escapeHtml(u.game_thumb)}" class="w-full h-full object-cover">` : '🎮'}
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] font-black text-cyan-600 dark:text-cyan-400 font-mono truncate">${escapeHtml(u.version_title || 'UPDATE')}</span>
+                <span class="text-[9px] text-slate-400 font-mono shrink-0">${formatLastSeen(u.updated_at)}</span>
+              </div>
+              <div class="font-bold text-xs text-slate-900 dark:text-white truncate">${escapeHtml(u.game_title || 'ゲーム')}</div>
+              <div class="text-[10px] text-slate-500 dark:text-slate-400 truncate">${escapeHtml(u.changelog || '')}</div>
+            </div>
+          </a>
+        `).join('');
+      } catch (e) {}
+    }
+
     loadGames();
-    checkUser();
+    checkUser().then(() => {
+      loadDailyQuestStatus();
+      handleReferralAndStats();
+    });
     startPresenceHeartbeat();
     loadCommunityPulse();
     loadLobbyPosts();
+    loadRecentUpdatesFeed();
     setInterval(loadCommunityPulse, 20000);
   </script>
 </body>

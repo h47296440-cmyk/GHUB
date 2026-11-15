@@ -1,5 +1,5 @@
 // G-HUB PWA Service Worker (Offline Games & App Shell Ready)
-const CACHE_NAME = 'ghub-cache-v3';
+const CACHE_NAME = 'ghub-cache-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

@@ -41,7 +41,7 @@ app.use('/supabase', createProxyMiddleware({
 }));
 
 // 2. JSONパーサー
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));
 
 // レビュー保存用インメモリキャッシュ
 const reviewsStore = new Map();
@@ -98,22 +98,49 @@ app.get('/api/game-updates', (req, res) => {
   res.json(list);
 });
 
+app.get('/api/game-updates/recent', (_req, res) => {
+  const all = [];
+  for (const [gid, list] of updatesStore.entries()) {
+    const gameMeta = gamesStore.get(gid) || cachedActualGames.find(g => g.id === gid);
+    for (const item of list) {
+      all.push({
+        ...item,
+        game_title: gameMeta?.title || 'アップデート作品',
+        game_thumb: gameMeta?.thumbnail_url || null,
+        game_tag: gameMeta?.tag || 'Indie'
+      });
+    }
+  }
+  all.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  res.json(all.slice(0, 12));
+});
+
 app.post('/api/game-updates', (req, res) => {
   const { game_id, version_title, changelog, author_email } = req.body;
   if (!game_id || !changelog) {
     return res.status(400).json({ error: 'Missing game_id or changelog' });
   }
+  const nowIso = new Date().toISOString();
   const list = updatesStore.get(game_id) || [];
   const newUpdate = {
     id: 'upd_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
     game_id,
     version_title: version_title || 'バージョン更新',
     changelog,
-    updated_at: new Date().toISOString(),
+    updated_at: nowIso,
     author_email: author_email || ''
   };
   list.unshift(newUpdate);
   updatesStore.set(game_id, list);
+
+  const existing = gamesStore.get(game_id) || cachedActualGames.find(g => g.id === game_id);
+  if (existing) {
+    const merged = { ...existing, updated_at: nowIso, last_update_title: newUpdate.version_title };
+    gamesStore.set(game_id, merged);
+    const cIdx = cachedActualGames.findIndex(g => g.id === game_id);
+    if (cIdx >= 0) cachedActualGames[cIdx] = merged;
+  }
+
   res.json({ success: true, update: newUpdate });
 });
 
@@ -167,7 +194,14 @@ async function refreshDemoFriendsFromActualGames() {
     }
 
     for (const g of gamesStore.values()) {
-      if (!games.some(x => x.id === g.id)) {
+      const idx = games.findIndex(x => x.id === g.id);
+      if (idx >= 0) {
+        const supaTime = games[idx].updated_at ? new Date(games[idx].updated_at).getTime() : 0;
+        const srvTime = g.updated_at ? new Date(g.updated_at).getTime() : 0;
+        if (srvTime >= supaTime && g.updated_at) {
+          games[idx] = { ...games[idx], ...g };
+        }
+      } else {
         games.push(g);
       }
     }
@@ -323,24 +357,49 @@ app.get('/api/games', (req, res) => {
     if (cached) return res.json(cached);
     return res.status(404).json({ error: 'Game not found' });
   }
-  res.json(Array.from(gamesStore.values()));
+  const merged = new Map();
+  for (const cg of cachedActualGames) {
+    if (cg?.id) merged.set(cg.id, cg);
+  }
+  for (const [id, sg] of gamesStore.entries()) {
+    const prev = merged.get(id);
+    if (prev) {
+      const prevTime = prev.updated_at ? new Date(prev.updated_at).getTime() : 0;
+      const sgTime = sg.updated_at ? new Date(sg.updated_at).getTime() : 0;
+      merged.set(id, sgTime >= prevTime ? { ...prev, ...sg } : { ...sg, ...prev });
+    } else {
+      merged.set(id, sg);
+    }
+  }
+  res.json(Array.from(merged.values()));
 });
 
 app.post('/api/games', (req, res) => {
   const gameData = req.body;
   if (!gameData || !gameData.id) return res.status(400).json({ error: 'Missing gameData or id' });
-  
-  gamesStore.set(gameData.id, {
-    ...gameData,
-    created_at: gameData.created_at || new Date().toISOString()
-  });
 
-  if (!cachedActualGames.some(g => g.id === gameData.id)) {
-    cachedActualGames.unshift(gameData);
+  const prev = gamesStore.get(gameData.id) || cachedActualGames.find(g => g.id === gameData.id) || {};
+  const nowIso = new Date().toISOString();
+  const mergedGame = {
+    ...prev,
+    ...gameData,
+    created_at: gameData.created_at || prev.created_at || nowIso,
+    updated_at: gameData.updated_at || nowIso,
+    likes_count: gameData.likes_count !== undefined ? gameData.likes_count : (prev.likes_count ?? 0),
+    play_count: gameData.play_count !== undefined ? gameData.play_count : (prev.play_count ?? 0)
+  };
+
+  gamesStore.set(gameData.id, mergedGame);
+
+  const cachedIdx = cachedActualGames.findIndex(g => g.id === gameData.id);
+  if (cachedIdx >= 0) {
+    cachedActualGames[cachedIdx] = mergedGame;
+  } else {
+    cachedActualGames.unshift(mergedGame);
   }
 
   refreshDemoFriendsFromActualGames();
-  res.json({ success: true, game: gameData });
+  res.json({ success: true, game: mergedGame });
 });
 
 app.post('/api/games/payload', (req, res) => {
@@ -595,6 +654,74 @@ app.post('/api/ingame-purchases', (req, res) => {
 // 🪙 コインチャージ API（無限チャージ防止のため無効化）
 app.post('/api/charge-coins', (req, res) => {
   res.status(403).json({ error: '任意チャージ機能は無効化されています。コインはログインボーナスやゲーム販売で獲得してください。' });
+});
+
+// 🎯 デイリークエスト（1日1クエスト1回限定・サーバー管理） & 友達招待トラッキング
+const QUEST_REWARDS = {
+  play1: 20,
+  social1: 20,
+  create1: 30
+};
+const dailyQuestClaimsStore = new Map();
+const referralsStore = new Map();
+
+app.get('/api/quests/status', (req, res) => {
+  const identity = String(req.query.identity || 'guest').trim().toLowerCase().slice(0, 120) || 'guest';
+  const today = new Date().toISOString().split('T')[0];
+  const claimedSet = dailyQuestClaimsStore.get(`${identity}:${today}`) || new Set();
+  res.json({
+    date: today,
+    claimed: Array.from(claimedSet),
+    rewards: QUEST_REWARDS
+  });
+});
+
+app.post('/api/quests/claim', (req, res) => {
+  const identity = String(req.body?.identity || 'guest').trim().toLowerCase().slice(0, 120) || 'guest';
+  const questId = String(req.body?.quest_id || '').trim();
+  const reward = QUEST_REWARDS[questId];
+  if (!reward) {
+    return res.status(400).json({ error: '無効なクエストIDです' });
+  }
+  const today = new Date().toISOString().split('T')[0];
+  const key = `${identity}:${today}`;
+  let claimedSet = dailyQuestClaimsStore.get(key);
+  if (!claimedSet) {
+    claimedSet = new Set();
+    dailyQuestClaimsStore.set(key, claimedSet);
+  }
+  if (claimedSet.has(questId)) {
+    return res.status(409).json({ error: '本日のこのクエスト報酬は受け取り済みです', alreadyClaimed: true, claimed: Array.from(claimedSet) });
+  }
+  claimedSet.add(questId);
+  res.json({
+    success: true,
+    quest_id: questId,
+    reward,
+    claimed: Array.from(claimedSet)
+  });
+});
+
+app.post('/api/referrals/track', (req, res) => {
+  const refCode = String(req.body?.ref_code || '').trim().slice(0, 80);
+  const visitorId = String(req.body?.visitor_id || req.ip || 'anon').trim().slice(0, 120);
+  if (!refCode || refCode === visitorId) {
+    return res.json({ success: false, credited: false, count: referralsStore.get(refCode)?.size || 0 });
+  }
+  let visitors = referralsStore.get(refCode);
+  if (!visitors) {
+    visitors = new Set();
+    referralsStore.set(refCode, visitors);
+  }
+  const isNew = !visitors.has(visitorId);
+  if (isNew) visitors.add(visitorId);
+  res.json({ success: true, credited: isNew, count: visitors.size });
+});
+
+app.get('/api/referrals/stats', (req, res) => {
+  const refCode = String(req.query.code || '').trim().slice(0, 80);
+  const count = refCode ? (referralsStore.get(refCode)?.size || 0) : 0;
+  res.json({ code: refCode, count });
 });
 
 // フレンド管理 API
@@ -1021,7 +1148,12 @@ async function fetchAllGamesForSeo() {
       if (Array.isArray(list)) {
         cachedActualGames = list;
         for (const g of list) {
-          if (g?.id) mergedMap.set(g.id, { ...(mergedMap.get(g.id) || {}), ...g });
+          if (g?.id) {
+            const existing = mergedMap.get(g.id) || {};
+            const exTime = existing.updated_at ? new Date(existing.updated_at).getTime() : 0;
+            const gTime = g.updated_at ? new Date(g.updated_at).getTime() : 0;
+            mergedMap.set(g.id, exTime > gTime ? { ...g, ...existing } : { ...existing, ...g });
+          }
         }
       }
     }
